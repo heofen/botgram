@@ -9,12 +9,16 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.R
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
+import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.database.AppDatabase
+import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
+import com.heofen.botgram.database.tables.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,18 +30,20 @@ import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onConten
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onEditedContentMessage
 import dev.inmo.tgbotapi.extensions.utils.asMediaContent
 import dev.inmo.tgbotapi.extensions.utils.asMediaGroupContent
-import dev.inmo.tgbotapi.extensions.utils.asMediaGroupMessage
-import dev.inmo.tgbotapi.extensions.utils.asPhotoContent
 import dev.inmo.tgbotapi.extensions.utils.asTextContent
-import dev.inmo.tgbotapi.extensions.utils.extensions.raw.channel_chat_created
 import dev.inmo.tgbotapi.extensions.utils.extensions.raw.edit_date
 import dev.inmo.tgbotapi.extensions.utils.extensions.raw.media_group_id
 import dev.inmo.tgbotapi.extensions.utils.extensions.raw.reply_to_message
 import dev.inmo.tgbotapi.extensions.utils.fromUserOrNull
-import dev.inmo.tgbotapi.extensions.utils.messageContentOrNull
 import dev.inmo.tgbotapi.extensions.utils.thumbedMediaFileOrNull
-import dev.inmo.tgbotapi.types.files.AnimatedSticker
+import dev.inmo.tgbotapi.extensions.utils.usernameChatOrNull
+import dev.inmo.tgbotapi.types.chat.ChannelChatImpl
+import dev.inmo.tgbotapi.types.chat.ExtendedPrivateChat
+import dev.inmo.tgbotapi.types.chat.GroupChatImpl
+import dev.inmo.tgbotapi.types.chat.PrivateChatImpl
+import dev.inmo.tgbotapi.types.chat.SupergroupChatImpl
 import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
+import dev.inmo.tgbotapi.types.message.content.AnimationContent
 import dev.inmo.tgbotapi.types.message.content.AudioContent
 import dev.inmo.tgbotapi.types.message.content.ContactContent
 import dev.inmo.tgbotapi.types.message.content.DocumentContent
@@ -51,7 +57,7 @@ import dev.inmo.tgbotapi.types.message.content.VideoNoteContent
 import dev.inmo.tgbotapi.types.message.content.VoiceContent
 import dev.inmo.tgbotapi.utils.PreviewFeature
 import dev.inmo.tgbotapi.utils.RiskFeature
-import korlibs.time.jvm.toDate
+import dev.inmo.tgbotapi.utils.extensions.threadIdOrNull
 import kotlinx.coroutines.cancel
 import java.lang.Exception
 
@@ -61,6 +67,7 @@ class GetUpdates : Service() {
 
     private lateinit var messageRepo: MessageRepository
     private lateinit var chatRepo: ChatRepository
+    private lateinit var userRepo: UserRepository
 
     override fun onCreate() {
         super.onCreate()
@@ -95,8 +102,10 @@ class GetUpdates : Service() {
         val bot = telegramBot(token)
 
         bot.buildBehaviourWithLongPolling {
-            onContentMessage {
-                TODO()
+            onContentMessage { msg ->
+                launch {
+                    handleMessage(msg)
+                }
             }
 
             onEditedContentMessage {
@@ -111,16 +120,106 @@ class GetUpdates : Service() {
     }
 
     private suspend fun handleMessage(message: ContentMessage<MessageContent>) {
+        try {
+            val msg = mapToMessage(message)
 
+            val chatExists = chatRepo.chatExists(msg.chatId)
+
+            if (!chatExists) {
+                val chat = mapToChat(message)
+                chatRepo.insertChat(chat)
+            } else {
+                chatRepo.updateLastMessage(
+                    chatId = msg.chatId,
+                    type = msg.type,
+                    text = msg.text,
+                    time = msg.timestamp
+                )
+            }
+
+            if (msg.senderId != null) {
+                val userExists = userRepo.userExists(msg.senderId)
+                if (!userExists) {
+                    val user = mapToUser(message)
+                    if (user != null) userRepo.insertUser(user)
+                }
+            }
+
+            messageRepo.insertMessage(msg)
+
+            Log.i("Handle message", "Success msg handle")
+        } catch (e: kotlin.Exception) {
+            Log.e("Handle message", "Error handling message: {}", e)
+        }
     }
 
+    @OptIn(PreviewFeature::class)
+    private fun mapToUser(message: ContentMessage<MessageContent>): User? {
+        val us = message.fromUserOrNull()?.user ?: return null
+
+        return User(
+            id = us.id.chatId.long,
+            firstName = us.firstName,
+            lastName = us.lastName,
+            bio = null,
+
+            avatarFileId = null,
+            avatarFileUniqueId = null,
+            avatarLocalPath = null,
+
+            canWriteMsgToPm = when (message.chat) {
+                is ExtendedPrivateChat -> true
+                else -> false
+            }
+        )
+    }
+
+    // маппинг из ktg chat в энтити из приложения
+    @OptIn(RiskFeature::class, PreviewFeature::class)
+    private fun mapToChat(message: ContentMessage<MessageContent>): Chat {
+        val chat = message.chat
+
+        return Chat(
+            id = chat.id.chatId.long,
+            type = when {
+                chat is PrivateChatImpl -> ChatType.PRIVATE
+                chat is GroupChatImpl -> ChatType.GROUP
+                chat is ChannelChatImpl -> ChatType.CHANNEL
+                chat is SupergroupChatImpl -> ChatType.SUPERGROUP
+                else -> ChatType.PRIVATE
+            },
+            title = when(chat) {
+                is GroupChatImpl -> chat.title
+                is SupergroupChatImpl -> chat.title
+                is ChannelChatImpl -> chat.title
+                else -> null
+            },
+            firstName = if (chat is PrivateChatImpl) {
+                message.fromUserOrNull()?.user?.firstName
+            } else null,
+            lastName = if (chat is PrivateChatImpl) {
+                message.fromUserOrNull()?.user?.lastName
+            } else null,
+            username = chat.usernameChatOrNull()?.toString(),
+
+            lastMessageType = determineMessageType(message.content),
+            lastMessageText = message.content.asTextContent()?.toString(),
+            lastMessageTime = message.date.unixMillisLong,
+            unreadCount = 0,
+
+            avatarFileId = null,
+            avatarFileUniqueId = null,
+            avatarLocalPath = null,
+        )
+    }
 
     // маппинг из ktg msg в энтити из приложения
     @OptIn(PreviewFeature::class, RiskFeature::class)
-    private suspend fun mapToMessage(message: ContentMessage<MessageContent>): Message{
+    private fun mapToMessage(message: ContentMessage<MessageContent>): Message{
         return Message(
             messageId = message.messageId.long,
             chatId = message.chat.id.chatId.long,
+            topicId = message.threadIdOrNull?.long,
             senderId = message.fromUserOrNull()?.user?.id?.chatId?.long,
             type = determineMessageType(message.content),
             timestamp = message.date.unixMillisLong,
@@ -130,6 +229,7 @@ class GetUpdates : Service() {
                 ?: message.content.asMediaContent()?.asTextContent()?.text,
 
             replyMsgId = message.reply_to_message?.messageId?.long,
+            replyMsgTopicId = message.threadIdOrNull?.long,
 
             fileId = extractFileId(message.content),
             fileUniqueId = extractFileUniqueId(message.content),
@@ -144,7 +244,7 @@ class GetUpdates : Service() {
             isEdited = message.edit_date != null,
             editedAt = message.edit_date?.asDate?.unixMillisLong,
 
-            mediaGroupId = message.media_group_id.toString(),
+            mediaGroupId = message.media_group_id?.toString(),
 
             isOutgoing = false
         )
@@ -152,12 +252,13 @@ class GetUpdates : Service() {
 
     private fun extractThumbnailFileId(content: MessageContent): String? {
         return when(content) {
-            is PhotoContent -> content.media.thumbedMediaFileOrNull()?.fileId?.toString()
-            is VideoContent -> content.media.thumbnail?.fileId.toString()
-            is DocumentContent -> content.media.thumbnail?.fileId.toString()
-            is AudioContent -> content.media.thumbnail?.fileId.toString()
-            is VideoNoteContent -> content.media.thumbnail?.fileId.toString()
-            is StickerContent -> content.media.thumbnail?.fileId.toString()
+            is PhotoContent -> content.media.thumbedMediaFileOrNull()?.fileId?.fileId
+            is VideoContent -> content.media.thumbnail?.fileId?.fileId
+            is AnimationContent -> content.media.thumbnail?.fileId?.fileId
+            is DocumentContent -> content.media.thumbnail?.fileId?.fileId
+            is AudioContent -> content.media.thumbnail?.fileId?.fileId
+            is VideoNoteContent -> content.media.thumbnail?.fileId?.fileId
+            is StickerContent -> content.media.thumbnail?.fileId?.fileId
             else -> null
         }
     }
@@ -166,6 +267,7 @@ class GetUpdates : Service() {
         return when(content) {
             is VideoContent -> content.media.duration
             is VideoNoteContent -> content.media.duration
+            is AnimationContent -> content.media.duration
             is AudioContent -> content.media.duration
             is VoiceContent -> content.media.duration
             else -> null
@@ -176,6 +278,7 @@ class GetUpdates : Service() {
         return when(content) {
             is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.width
             is VideoContent -> content.media.width
+            is AnimationContent -> content.media.width
             is VideoNoteContent -> content.media.width
             is StickerContent -> content.media.width
             else -> null
@@ -186,6 +289,7 @@ class GetUpdates : Service() {
         return when(content) {
             is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.height
             is VideoContent -> content.media.height
+            is AnimationContent -> content.media.height
             is VideoNoteContent -> content.media.height
             is StickerContent -> content.media.height
             else -> null
@@ -194,13 +298,14 @@ class GetUpdates : Service() {
 
     private fun extractFileId(content: MessageContent): String? {
         return when(content) {
-            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileId.toString()
-            is VideoContent -> content.media.fileId.toString()
-            is AudioContent -> content.media.fileId.toString()
-            is VoiceContent -> content.media.fileId.toString()
-            is VideoNoteContent -> content.media.fileId.toString()
-            is DocumentContent -> content.media.fileId.toString()
-            is StickerContent -> content.media.fileId.toString()
+            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileId?.fileId
+            is VideoContent -> content.media.fileId.fileId
+            is AnimationContent -> content.media.fileId.fileId
+            is AudioContent -> content.media.fileId.fileId
+            is VoiceContent -> content.media.fileId.fileId
+            is VideoNoteContent -> content.media.fileId.fileId
+            is DocumentContent -> content.media.fileId.fileId
+            is StickerContent -> content.media.fileId.fileId
             else -> null
         }
     }
@@ -209,6 +314,7 @@ class GetUpdates : Service() {
         return when(content) {
             is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileUniqueId.toString()
             is VideoContent -> content.media.fileUniqueId.toString()
+            is AnimationContent -> content.media.fileUniqueId.toString()
             is AudioContent -> content.media.fileUniqueId.toString()
             is VoiceContent -> content.media.fileUniqueId.toString()
             is VideoNoteContent -> content.media.fileUniqueId.toString()
@@ -220,13 +326,14 @@ class GetUpdates : Service() {
 
     private fun extractFileSize(content: MessageContent): Long? {
         return when(content) {
-            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileSize?.toLong()
-            is VideoContent -> content.media.fileSize?.toLong()
-            is AudioContent -> content.media.fileSize?.toLong()
-            is VoiceContent -> content.media.fileSize?.toLong()
-            is VideoNoteContent -> content.media.fileSize?.toLong()
-            is DocumentContent -> content.media.fileSize?.toLong()
-            is StickerContent -> content.media.fileSize?.toLong()
+            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileSize
+            is VideoContent -> content.media.fileSize
+            is AnimationContent -> content.media.fileSize
+            is AudioContent -> content.media.fileSize
+            is VoiceContent -> content.media.fileSize
+            is VideoNoteContent -> content.media.fileSize
+            is DocumentContent -> content.media.fileSize
+            is StickerContent -> content.media.fileSize
             else -> null
         }
     }
@@ -237,6 +344,7 @@ class GetUpdates : Service() {
             content is TextContent -> MessageType.TEXT
             content is PhotoContent -> MessageType.PHOTO
             content is VideoContent -> MessageType.VIDEO
+            content is AnimationContent -> MessageType.ANIMATION
             content is AudioContent -> MessageType.AUDIO
             content is VoiceContent -> MessageType.VOICE
             content is VideoNoteContent -> MessageType.VIDEO_NOTE

@@ -4,12 +4,14 @@ enum class ChatType {
     PRIVATE,
     GROUP,
     CHANNEL,
+    SUPERGROUP,
 }
 
 enum class MessageType {
     TEXT,
     PHOTO,
     VIDEO,
+    ANIMATION, // гифки
     AUDIO,
     VOICE,
     VIDEO_NOTE, // кружок

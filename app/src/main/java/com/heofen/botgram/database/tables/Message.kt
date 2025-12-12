@@ -10,6 +10,7 @@ import com.heofen.botgram.MessageType
 data class Message(
     val messageId: Long,
     val chatId: Long,
+    val topicId: Long?,
     val senderId: Long?,
     val type: MessageType,
     val timestamp: Long,
@@ -18,6 +19,7 @@ data class Message(
     val caption: String?,
 
     val replyMsgId: Long?,
+    val replyMsgTopicId: Long?,
     // val replyChatId: Long?,
 
     val fileId: String?,

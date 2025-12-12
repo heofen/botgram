@@ -8,11 +8,12 @@ data class User(
     @PrimaryKey
     val id: Long,
     val firstName: String,
-    val secondName: String?,
+    val lastName: String?,
     val bio: String?,
 
     val avatarFileId: String?,
     val avatarFileUniqueId: String?,
     val avatarLocalPath: String?,
-    val avatarUpdatedAt: Long?
+
+    val canWriteMsgToPm: Boolean = false
 )
