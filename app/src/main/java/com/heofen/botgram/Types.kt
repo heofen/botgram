@@ -12,9 +12,11 @@ enum class MessageType {
     VIDEO,
     AUDIO,
     VOICE,
-    VIDEO_NOTE, //кружок
+    VIDEO_NOTE, // кружок
     DOCUMENT,
-    STICKER,
+    STICKER, // обычный
+    ANIMATED_STICKER, // tgs стикер
+    VIDEO_STICKER, // webm стикер
     CONTACT,
     LOCATION,
 }

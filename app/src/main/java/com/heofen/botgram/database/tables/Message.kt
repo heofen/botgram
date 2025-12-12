@@ -10,12 +10,15 @@ import com.heofen.botgram.MessageType
 data class Message(
     val messageId: Long,
     val chatId: Long,
-    val senderId: Long,
+    val senderId: Long?,
     val type: MessageType,
     val timestamp: Long,
 
     val text: String?,
     val caption: String?,
+
+    val replyMsgId: Long?,
+    // val replyChatId: Long?,
 
     val fileId: String?,
     val fileUniqueId: String?,
@@ -24,11 +27,13 @@ data class Message(
 
     val width: Int?,
     val height: Int?,
-    val duration: Int?,
+    val duration: Long?,
     val thumbnailFileId: String?,
 
     val isEdited: Boolean = false,
     val editedAt: Long? = null,
+
     val mediaGroupId: String?,
+
     val isOutgoing: Boolean = false
 )
