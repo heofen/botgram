@@ -231,6 +231,8 @@ class GetUpdates : Service() {
             replyMsgId = message.reply_to_message?.messageId?.long,
             replyMsgTopicId = message.threadIdOrNull?.long,
 
+            fileName = extractFileName(message.content),
+            fileExtension = extractFileExtension(message.content),
             fileId = extractFileId(message.content),
             fileUniqueId = extractFileUniqueId(message.content),
             fileLocalPath = null,
@@ -249,6 +251,66 @@ class GetUpdates : Service() {
             isOutgoing = false
         )
     }
+
+    private fun extractFileExtension(content: MessageContent): String? {
+        return when(content) {
+            is DocumentContent -> {
+                content.media.fileName?.substringAfterLast('.', "")
+                    ?: getMimeTypeExtension(content.media.mimeType?.raw)
+            }
+            is AudioContent -> {
+                content.media.fileName?.substringAfterLast('.', "")
+                    ?: "mp3"
+            }
+
+            is PhotoContent -> "jpg"
+            is VideoContent -> "mp4"
+            is AnimationContent -> "mp4"
+            is VoiceContent -> "ogg"
+            is VideoNoteContent -> "mp4"
+            is StickerContent -> when {
+                content.media.isAnimated -> "tgs"
+                content.media.isVideo -> "webm"
+                else -> "webp"
+            }
+
+            else -> null
+        }
+    }
+
+    private fun getMimeTypeExtension(mimeType: String?): String {
+        return when(mimeType) {
+            "image/jpeg" -> "jpg"
+            "image/png" -> "png"
+            "image/gif" -> "gif"
+            "image/webp" -> "webp"
+            "video/mp4" -> "mp4"
+            "video/mpeg" -> "mpeg"
+            "audio/mpeg" -> "mp3"
+            "audio/ogg" -> "ogg"
+            "application/pdf" -> "pdf"
+            "application/zip" -> "zip"
+            "application/x-rar-compressed" -> "rar"
+            "text/plain" -> "txt"
+            else -> "bin"
+        }
+    }
+
+    private fun extractFileName(content: MessageContent): String? {
+        return when(content) {
+            is DocumentContent -> content.media.fileName
+            is AudioContent -> content.media.fileName
+
+            is PhotoContent -> null
+            is VideoContent -> null
+            is VoiceContent -> null
+            is StickerContent -> null
+            is AnimationContent -> null
+            is VideoNoteContent -> null
+            else -> null
+        }
+    }
+
 
     private fun extractThumbnailFileId(content: MessageContent): String? {
         return when(content) {

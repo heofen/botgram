@@ -40,4 +40,7 @@ class MessageRepository(private val messageDao: MessageDao) {
 
     suspend fun deleteOldMessages(chatId: Long, beforeTimestamp: Long) =
         messageDao.deleteOldMessages(chatId, beforeTimestamp)
+
+    suspend fun fileExists(fileUniqueId: String): Boolean =
+        messageDao.fileExists(fileUniqueId)
 }

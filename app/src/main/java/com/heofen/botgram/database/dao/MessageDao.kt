@@ -52,4 +52,7 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE chatId = :chatId AND timestamp < :beforeTimestamp")
     suspend fun deleteOldMessages(chatId: Long, beforeTimestamp: Long)
+
+    @Query("SELECT EXISTS(SELECT * FROM messages WHERE fileUniqueId = :fileUniqueId)")
+    suspend fun fileExists(fileUniqueId: String): Boolean
 }

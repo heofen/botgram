@@ -1,5 +1,6 @@
 package com.heofen.botgram.database.tables
 
+import androidx.annotation.RequiresExtension
 import androidx.room.Entity
 import com.heofen.botgram.MessageType
 
@@ -22,6 +23,8 @@ data class Message(
     val replyMsgTopicId: Long?,
     // val replyChatId: Long?,
 
+    val fileName: String?,
+    val fileExtension: String?,
     val fileId: String?,
     val fileUniqueId: String?,
     val fileLocalPath: String?,
