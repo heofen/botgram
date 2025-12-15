@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -19,6 +20,7 @@ import com.heofen.botgram.database.AppDatabase
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
+import dev.inmo.tgbotapi.bot.ktor.KtorRequestsExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -57,8 +59,13 @@ import dev.inmo.tgbotapi.types.message.content.VideoNoteContent
 import dev.inmo.tgbotapi.types.message.content.VoiceContent
 import dev.inmo.tgbotapi.utils.PreviewFeature
 import dev.inmo.tgbotapi.utils.RiskFeature
+import dev.inmo.tgbotapi.utils.TelegramAPIUrlsKeeper
 import dev.inmo.tgbotapi.utils.extensions.threadIdOrNull
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.lang.Exception
 
 class GetUpdates : Service() {
@@ -80,44 +87,51 @@ class GetUpdates : Service() {
 
     @SuppressLint("ForegroundServiceType")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val botToken = "" //intent?.getStringExtra("BOT_TOKEN") ?: return START_NOT_STICKY
+        val botToken = intent?.getStringExtra("BOT_TOKEN") ?: return START_NOT_STICKY
 
         val notification = createNotification()
-        startForeground(NOTIFICATION_ID, notification)
+        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 
         serviceScope.launch {
-            try {
-                startBot(botToken)
-            } catch (e: Exception) {
-                Log.e("GetUpdatesService", "Error starting bot: ${e.message}")
-                stopSelf()
+            while (isActive) {
+                try {
+                    Log.i("GetUpdates", "Launching Long Polling...")
+                    startBot(botToken)
+                } catch (e: Exception) {
+                    Log.e("GetUpdates", "Bot crashed: ${e.message}. Restart from 5 sec...")
+                    delay(5000)
+                }
             }
         }
 
         return START_STICKY
-        TODO("Сделать по человеческий получение токена")
     }
 
     private suspend fun startBot(token: String) {
-        val bot = telegramBot(token)
+        // НИКОГДА НЕ ТРОГАЙ КОД НИЖЕ. НЕ ПРИ КАКИХ ОБСТОЯТЕЛЬСТВАХ
+        val client = HttpClient(OkHttp)
+
+        val urlsKeeper = TelegramAPIUrlsKeeper(token)
+
+        val bot = KtorRequestsExecutor(
+            telegramAPIUrlsKeeper = urlsKeeper,
+            client = client
+        )
+
 
         bot.buildBehaviourWithLongPolling {
             onContentMessage { msg ->
-                launch {
-                    handleMessage(msg)
-                }
+                launch { handleMessage(msg) }
             }
-
             onEditedContentMessage {
-                TODO()
+                // TODO
             }
-
             onChatMemberUpdated {
-                TODO()
+                // TODO
             }
-        }
-
+        }.join()
     }
+
 
     private suspend fun handleMessage(message: ContentMessage<MessageContent>) {
         try {
@@ -203,7 +217,7 @@ class GetUpdates : Service() {
             username = chat.usernameChatOrNull()?.toString(),
 
             lastMessageType = determineMessageType(message.content),
-            lastMessageText = message.content.asTextContent()?.toString(),
+            lastMessageText = message.content.asTextContent()?.text,
             lastMessageTime = message.date.unixMillisLong,
             unreadCount = 0,
 

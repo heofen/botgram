@@ -26,3 +26,5 @@ data class Chat(
     val avatarFileUniqueId: String?,
     val avatarLocalPath: String?,
 )
+
+// TODO("для lastMessage добавить sender id")

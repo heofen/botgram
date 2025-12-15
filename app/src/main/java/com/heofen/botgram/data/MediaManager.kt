@@ -15,9 +15,6 @@ class MediaManager (
     private val bot: TelegramBot,
 )
 {
-    private val internalDir: File = context.filesDir
-
-
     suspend fun getFile(
         fileId: String,
         fileExtension: String,
@@ -38,10 +35,10 @@ class MediaManager (
             val fileInfo = bot.execute(GetFile(FileId(fileId)))
             bot.downloadFile(fileInfo, file)
 
-            if (file.exists() && file.length() > 0) {
-                return file.absolutePath
+            return if (file.exists() && file.length() > 0) {
+                file.absolutePath
             } else {
-                return null
+                null
             }
         } catch (e: Exception) {
             Log.e("Media Manager Exception", e.toString())
