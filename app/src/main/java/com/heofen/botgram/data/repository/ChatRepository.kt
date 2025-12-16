@@ -1,11 +1,16 @@
 package com.heofen.botgram.data.repository
 
 import com.heofen.botgram.MessageType
+import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.database.dao.ChatDao
 import com.heofen.botgram.database.tables.Chat
 import kotlinx.coroutines.flow.Flow
+import java.io.File
 
-class ChatRepository(private val chatDao: ChatDao) {
+class ChatRepository(
+    private val chatDao: ChatDao,
+    private val mediaManager: MediaManager
+) {
     fun getAllChats(): Flow<List<Chat>> = chatDao.getAllChats()
 
     suspend fun getById(id: Long): Chat? = chatDao.getById(id)
@@ -16,16 +21,8 @@ class ChatRepository(private val chatDao: ChatDao) {
 
     suspend fun upsertChat(chat: Chat) = chatDao.upsert(chat)
 
-    suspend fun updateLastMessage(chatId: Long, type: MessageType, text: String?, time: Long) =
-        chatDao.updateLastMessage(chatId, type, text, time)
-
-    suspend fun incrementUnread(chatId: Long) = chatDao.incrementUnread(chatId)
-
-    suspend fun resetUnread(chatId: Long) = chatDao.resetUnread(chatId)
-
-
-//    suspend fun updateMuted(chatId: Long, isMuted: Boolean) =
-//        chatDao.updateMuted(chatId, isMuted)
+    suspend fun updateLastMessage(chatId: Long, type: MessageType, text: String?, time: Long, senderId: Long?) =
+        chatDao.updateLastMessage(chatId, type, text, time, senderId)
 
     suspend fun updateAvatar(
         chatId: Long,
@@ -33,4 +30,18 @@ class ChatRepository(private val chatDao: ChatDao) {
         fileUniqueId: String?,
         localPath: String?,
     ) = chatDao.updateAvatar(chatId, fileId, fileUniqueId, localPath)
+
+    suspend fun loadAvatarIfMissing(chatId: Long) {
+        val chat = chatDao.getById(chatId) ?: return
+
+        if (chat.avatarLocalPath != null) {
+            if (File(chat.avatarLocalPath).exists()) return
+        }
+
+        val (fileId, localPath) = mediaManager.downloadChatAvatar(chatId)
+
+        if (localPath != null) {
+            chatDao.updateAvatar(chatId, fileId, null, localPath)
+        }
+    }
 }

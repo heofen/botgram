@@ -18,7 +18,8 @@ import dev.chrisbanes.haze.hazeSource
 
 @Composable
 fun ChatListScreen(
-    viewModel: ChatListViewModel
+    viewModel: ChatListViewModel,
+    onChatClick: (Long) -> Unit
 ) {
     val chats by viewModel.chatListState.collectAsState(initial = emptyList())
     val hazeState = remember { HazeState() }
@@ -46,7 +47,7 @@ fun ChatListScreen(
                     ChatCell(
                         chat = chat,
                         onChatSellClick = {
-                            // TODO: сделать чат
+                            onChatClick(chat.id)
                         }
                     )
                 }

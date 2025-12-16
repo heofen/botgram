@@ -1,10 +1,14 @@
 package com.heofen.botgram.data.repository
 
+import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.database.dao.UserDao
 import com.heofen.botgram.database.tables.User
-import kotlinx.coroutines.flow.Flow
+import java.io.File
 
-class UserRepository(private val userDao: UserDao) {
+class UserRepository(
+    private val userDao: UserDao,
+    private val mediaManager: MediaManager
+) {
     suspend fun getById(id: Long): User? = userDao.getById(id)
 
     suspend fun userExists(id: Long): Boolean = userDao.userExists(id)
@@ -22,4 +26,19 @@ class UserRepository(private val userDao: UserDao) {
 
     suspend fun findCachedAvatar(fileUniqueId: String): User? =
         userDao.findByAvatarUniqueId(fileUniqueId)
+
+    suspend fun loadAvatarIfMissing(userId: Long) {
+        val user = userDao.getById(userId) ?: return
+
+        if (user.avatarLocalPath != null) {
+            val file = File(user.avatarLocalPath)
+            if (file.exists()) return
+        }
+
+        val (fileId, localPath) = mediaManager.downloadUserAvatar(userId)
+
+        if (localPath != null) {
+            userDao.updateAvatar(userId, fileId, null, localPath)
+        }
+    }
 }

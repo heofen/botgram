@@ -50,10 +50,42 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.remember
-import androidx.room.util.copy
-import dev.chrisbanes.haze.haze
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.heofen.botgram.utils.extensions.getInitials
 import dev.chrisbanes.haze.hazeSource
+import java.io.File
 
+@Composable
+fun ChatAvatar(
+    chat: Chat,
+    modifier: Modifier = Modifier
+) {
+    val model = if (chat.avatarLocalPath != null) File(chat.avatarLocalPath) else null
+
+    if (model != null && model.exists()) {
+        AsyncImage(
+            model = model,
+            contentDescription = "Chat Avatar",
+            modifier = modifier.clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .clip(CircleShape)
+                .background(Color.Gray),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = chat.getInitials(),
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
 
 @Composable
 fun ChatListScreenBar(
@@ -114,12 +146,13 @@ fun ChatListScreenBar(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = title,
+                    text = "Botgram",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 20.sp
                 )
             }
 
@@ -152,7 +185,8 @@ fun ChatListScreenBar(
 @Composable
 fun ChatCell(
     chat: Chat,
-    onChatSellClick: () -> Unit = {}
+    unreadedCount: Int = 0,
+    onChatSellClick: (Long) -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -172,50 +206,13 @@ fun ChatCell(
             }
             .background(color = MaterialTheme.colorScheme.background)
             .fillMaxWidth(1f)
+            .clickable { onChatSellClick(chat.id) }
             .padding(8.dp)
-            .clickable { onChatSellClick }
     ) {
-        if (chat.avatarFileId != null) {
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(Color.Cyan),
-                contentAlignment = Alignment.Center
-            ) {
-                val imageLetter: String = when {
-                    chat.title != null -> chat.title.firstOrNull()?.toString()?.uppercase() ?: ""
-                    else -> (chat.firstName?.firstOrNull()?.toString()?.uppercase() ?: "") +
-                            (chat.lastName?.firstOrNull()?.toString()?.uppercase() ?: "")
-                }
-
-                Text(
-                    text = imageLetter,
-                    color = Color.White
-                )
-            }
-//            TODO("потом сделать как надо")
-
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(Color.Gray),
-                contentAlignment = Alignment.Center
-            ) {
-                val imageLetter: String = when {
-                    chat.title != null -> chat.title.firstOrNull()?.toString()?.uppercase() ?: ""
-                    else -> (chat.firstName?.firstOrNull()?.toString()?.uppercase() ?: "") +
-                            (chat.lastName?.firstOrNull()?.toString()?.uppercase() ?: "")
-                }
-
-                Text(
-                    text = imageLetter,
-                    color = Color.White
-                )
-            }
-        }
+        ChatAvatar(
+            chat = chat,
+            modifier = Modifier.size(50.dp)
+        )
 
         Column(
             modifier = Modifier
@@ -295,19 +292,19 @@ fun ChatCell(
                         modifier = Modifier.weight(1f)
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(Color.Green),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = chat.unreadCount.toString(),
-                        color = Color.White,
-                        fontSize = 14.sp
-                    )
-                }
+//                Box(
+//                    modifier = Modifier
+//                        .size(24.dp)
+//                        .clip(CircleShape)
+//                        .background(Color.Green),
+//                    contentAlignment = Alignment.Center
+//                ) {
+//                    Text(
+//                        text = chat.unreadCount.toString(),
+//                        color = Color.White,
+//                        fontSize = 14.sp
+//                    )
+//                }
             }
         }
     }
@@ -328,7 +325,7 @@ fun ChatCellPreview() {
             lastMessageType = MessageType.TEXT,
             lastMessageText = "Как дела? Давно не виделись",
             lastMessageTime = System.currentTimeMillis(),
-            unreadCount = 3,
+            lastMessageSenderId = null,
 
             avatarFileId = null,
             avatarFileUniqueId = null,

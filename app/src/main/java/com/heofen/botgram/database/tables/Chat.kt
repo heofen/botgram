@@ -18,7 +18,7 @@ data class Chat(
     val lastMessageType: MessageType?,
     val lastMessageText: String?,
     val lastMessageTime: Long?,
-    val unreadCount: Int = 0,
+    val lastMessageSenderId: Long?,
 
 //    val isMuted: Boolean = false,
 

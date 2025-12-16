@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.R
+import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
@@ -25,7 +26,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import dev.inmo.tgbotapi.bot.ktor.telegramBot
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onChatMemberUpdated
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onContentMessage
@@ -79,9 +79,20 @@ class GetUpdates : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        val client = HttpClient(OkHttp)
+        val token = ""
+        val urlsKeeper = TelegramAPIUrlsKeeper(token)
+
+        val bot = KtorRequestsExecutor(
+            telegramAPIUrlsKeeper = urlsKeeper,
+            client = client
+        )
+        val mediaManager = MediaManager(applicationContext, bot)
+
         val db = AppDatabase.getDatabase(applicationContext)
         messageRepo = MessageRepository(db.messageDao())
-        chatRepo = ChatRepository(db.chatDao())
+        chatRepo = ChatRepository(db.chatDao(), mediaManager)
+        userRepo = UserRepository(db.userDao(), mediaManager)
     }
 
 
@@ -118,7 +129,6 @@ class GetUpdates : Service() {
             client = client
         )
 
-
         bot.buildBehaviourWithLongPolling {
             onContentMessage { msg ->
                 launch { handleMessage(msg) }
@@ -147,20 +157,28 @@ class GetUpdates : Service() {
                     chatId = msg.chatId,
                     type = msg.type,
                     text = msg.text,
-                    time = msg.timestamp
+                    time = msg.timestamp,
+                    senderId = msg.senderId
                 )
             }
 
-            if (msg.senderId != null) {
-                val userExists = userRepo.userExists(msg.senderId)
-                if (!userExists) {
-                    val user = mapToUser(message)
-                    if (user != null) userRepo.insertUser(user)
+            try {
+                if (msg.senderId != null) {
+                    val userExists = userRepo.userExists(msg.senderId)
+                    if (!userExists) {
+                        val user = mapToUser(message)
+                        if (user != null) userRepo.insertUser(user)
+                    }
                 }
+            } catch (e: kotlin.Exception) {
+                Log.e("User handle", "User handle err {}", e)
             }
 
-            messageRepo.insertMessage(msg)
-
+            try {
+                messageRepo.insertMessage(msg)
+            } catch (e: kotlin.Exception) {
+                Log.e("msg handle", "msg handle err {}", e)
+            }
             Log.i("Handle message", "Success msg handle")
         } catch (e: kotlin.Exception) {
             Log.e("Handle message", "Error handling message: {}", e)
@@ -219,7 +237,7 @@ class GetUpdates : Service() {
             lastMessageType = determineMessageType(message.content),
             lastMessageText = message.content.asTextContent()?.text,
             lastMessageTime = message.date.unixMillisLong,
-            unreadCount = 0,
+            lastMessageSenderId = message.fromUserOrNull()?.user?.id?.chatId?.long,
 
             avatarFileId = null,
             avatarFileUniqueId = null,
@@ -416,24 +434,25 @@ class GetUpdates : Service() {
 
 
     private fun determineMessageType(content: MessageContent): MessageType {
-        return when {
-            content is TextContent -> MessageType.TEXT
-            content is PhotoContent -> MessageType.PHOTO
-            content is VideoContent -> MessageType.VIDEO
-            content is AnimationContent -> MessageType.ANIMATION
-            content is AudioContent -> MessageType.AUDIO
-            content is VoiceContent -> MessageType.VOICE
-            content is VideoNoteContent -> MessageType.VIDEO_NOTE
-            content is DocumentContent -> MessageType.DOCUMENT
-            content is StickerContent -> {
+        return when (content) {
+            is TextContent -> MessageType.TEXT
+            is PhotoContent -> MessageType.PHOTO
+            is VideoContent -> MessageType.VIDEO
+            is AnimationContent -> MessageType.ANIMATION
+            is AudioContent -> MessageType.AUDIO
+            is VoiceContent -> MessageType.VOICE
+            is VideoNoteContent -> MessageType.VIDEO_NOTE
+            is DocumentContent -> MessageType.DOCUMENT
+            is StickerContent -> {
                 when {
                     content.media.isAnimated -> MessageType.ANIMATED_STICKER
                     content.media.isVideo -> MessageType.VIDEO_STICKER
                     else -> MessageType.STICKER
                 }
             }
-            content is ContactContent -> MessageType.CONTACT
-            content is LocationContent -> MessageType.LOCATION
+
+            is ContactContent -> MessageType.CONTACT
+            is LocationContent -> MessageType.LOCATION
             else -> MessageType.TEXT
         }
     }

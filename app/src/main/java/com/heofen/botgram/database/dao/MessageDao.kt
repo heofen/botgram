@@ -55,4 +55,7 @@ interface MessageDao {
 
     @Query("SELECT EXISTS(SELECT * FROM messages WHERE fileUniqueId = :fileUniqueId)")
     suspend fun fileExists(fileUniqueId: String): Boolean
+
+    @Query("UPDATE messages SET readStatus = 1 WHERE chatId = :chatId AND messageId = :msgId")
+    suspend fun readMessage(chatId: Long, msgId: Long)
 }

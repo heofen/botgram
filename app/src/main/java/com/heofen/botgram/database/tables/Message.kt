@@ -40,5 +40,7 @@ data class Message(
 
     val mediaGroupId: String?,
 
+    val readStatus: Boolean = false,
+
     val isOutgoing: Boolean = false
 )

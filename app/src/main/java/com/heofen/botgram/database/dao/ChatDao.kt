@@ -29,16 +29,11 @@ interface ChatDao {
         UPDATE chats 
         SET lastMessageType = :type,
             lastMessageText = :text, 
-            lastMessageTime = :time 
+            lastMessageTime = :time,
+            lastMessageSenderId = :senderId
         WHERE id = :chatId
     """)
-    suspend fun updateLastMessage(chatId: Long, type: MessageType, text: String?, time: Long)
-
-    @Query("UPDATE chats SET unreadCount = unreadCount + 1 WHERE id = :chatId")
-    suspend fun incrementUnread(chatId: Long)
-
-    @Query("UPDATE chats SET unreadCount = 0 WHERE id = :chatId")
-    suspend fun resetUnread(chatId: Long)
+    suspend fun updateLastMessage(chatId: Long, type: MessageType, text: String?, time: Long, senderId: Long?)
 
 
 //    @Query("UPDATE chats SET isMuted = :isMuted WHERE id = :chatId")
