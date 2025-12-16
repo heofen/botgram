@@ -14,6 +14,7 @@ import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.R
 import com.heofen.botgram.data.MediaManager
+import com.heofen.botgram.data.local.TokenManager
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
@@ -79,35 +80,38 @@ class GetUpdates : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        val client = HttpClient(OkHttp)
-        val token = ""
-        val urlsKeeper = TelegramAPIUrlsKeeper(token)
-
-        val bot = KtorRequestsExecutor(
-            telegramAPIUrlsKeeper = urlsKeeper,
-            client = client
-        )
-        val mediaManager = MediaManager(applicationContext, bot)
-
-        val db = AppDatabase.getDatabase(applicationContext)
-        messageRepo = MessageRepository(db.messageDao())
-        chatRepo = ChatRepository(db.chatDao(), mediaManager)
-        userRepo = UserRepository(db.userDao(), mediaManager)
     }
 
 
     @SuppressLint("ForegroundServiceType")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val botToken = intent?.getStringExtra("BOT_TOKEN") ?: return START_NOT_STICKY
-
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+
+        val tokenManager = TokenManager(applicationContext)
+        val token = tokenManager.getToken()
+
+        if (token.isNullOrBlank()) {
+            Log.e("GetUpdates", "Token not found. Stopping service.")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        val client = HttpClient(OkHttp)
+        val urlsKeeper = TelegramAPIUrlsKeeper(token)
+        val bot = KtorRequestsExecutor(urlsKeeper, client)
+        val mediaManager = MediaManager(applicationContext, bot)
+        val db = AppDatabase.getDatabase(applicationContext)
+
+        messageRepo = MessageRepository(db.messageDao())
+        chatRepo = ChatRepository(db.chatDao(), mediaManager)
+        userRepo = UserRepository(db.userDao(), mediaManager)
 
         serviceScope.launch {
             while (isActive) {
                 try {
                     Log.i("GetUpdates", "Launching Long Polling...")
-                    startBot(botToken)
+                    startBot(token)
                 } catch (e: Exception) {
                     Log.e("GetUpdates", "Bot crashed: ${e.message}. Restart from 5 sec...")
                     delay(5000)

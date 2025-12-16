@@ -2,6 +2,7 @@ package com.heofen.botgram
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -15,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.heofen.botgram.data.MediaManager
+import com.heofen.botgram.data.local.TokenManager
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
@@ -24,33 +26,83 @@ import com.heofen.botgram.ui.screens.chatlist.ChatListScreen
 import com.heofen.botgram.ui.screens.chatlist.ChatListViewModel
 import com.heofen.botgram.ui.screens.group.GroupScreen
 import com.heofen.botgram.ui.screens.group.GroupViewModel
+import com.heofen.botgram.ui.screens.login.LoginScreen
 import com.heofen.botgram.ui.theme.BotgramTheme
 import dev.inmo.tgbotapi.bot.ktor.KtorRequestsExecutor
+import dev.inmo.tgbotapi.extensions.api.telegramBot
 import dev.inmo.tgbotapi.utils.TelegramAPIUrlsKeeper
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
-
-    companion object {
-        const val BOT_TOKEN = ""
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        val tokenManager = TokenManager(applicationContext)
+        val token = tokenManager.getToken()
+
+        if (token.isNullOrBlank()) {
+            setContent {
+                LoginScreen(
+                    onCheckToken = { inputToken ->
+                        withContext(Dispatchers.IO) {
+                            try {
+                                val client = OkHttpClient()
+                                val request = Request.Builder()
+                                    .url("https://api.telegram.org/bot$inputToken/getMe")
+                                    .build()
+
+                                client.newCall(request).execute().use { response ->
+                                    if (!response.isSuccessful) return@withContext false
+
+                                    val responseBody = response.body?.string() ?: return@withContext false
+
+                                    val json = JSONObject(responseBody)
+                                    val isOk = json.optBoolean("ok", false)
+
+                                    if (isOk) {
+                                        tokenManager.saveToken(inputToken)
+                                        Log.i("Login", "Token is valid. Saved.")
+                                        true
+                                    } else {
+                                        Log.w("Login", "Telegram API returned ok: false")
+                                        false
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e("Login", "Network error: ${e.message}")
+                                false
+                            }
+                        }
+                    },
+                    onLoginSuccess = {
+                        val intent = intent
+                        finish()
+                        startActivity(intent)
+                    }
+                )
+            }
+            return
+        }
+
+
         startUpdateService()
 
         val database = AppDatabase.getDatabase(applicationContext)
-
         val httpClient = HttpClient(OkHttp)
-        val bot = KtorRequestsExecutor(TelegramAPIUrlsKeeper(BOT_TOKEN), httpClient)
+
+        val bot = KtorRequestsExecutor(TelegramAPIUrlsKeeper(token), httpClient)
         val mediaManager = MediaManager(applicationContext, bot)
 
         val chatRepository = ChatRepository(database.chatDao(), mediaManager)
         val messageRepository = MessageRepository(database.messageDao())
-
         val userRepository = UserRepository(database.userDao(), mediaManager)
 
         setContent {
@@ -112,9 +164,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startUpdateService() {
-        val intent = Intent(this, GetUpdates::class.java).apply {
-            putExtra("BOT_TOKEN", BOT_TOKEN)
-        }
+        val intent = Intent(this, GetUpdates::class.java)
         ContextCompat.startForegroundService(this, intent)
     }
 }

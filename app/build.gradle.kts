@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.insert-koin:koin-androidx-compose:3.5.0")
 }
 
 configurations.all {
