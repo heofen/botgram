@@ -17,6 +17,7 @@ compose-material-icons = "1.7.8"
 foundation = "1.10.0"
 ktor = "3.3.3"
 uiText = "1.10.0"
+foundationLayout = "1.10.0"
 
 
 
@@ -45,6 +46,7 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
+androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -103,7 +103,7 @@ class GetUpdates : Service() {
         val mediaManager = MediaManager(applicationContext, bot)
         val db = AppDatabase.getDatabase(applicationContext)
 
-        messageRepo = MessageRepository(db.messageDao())
+        messageRepo = MessageRepository(db.messageDao(), bot)
         chatRepo = ChatRepository(db.chatDao(), mediaManager)
         userRepo = UserRepository(db.userDao(), mediaManager)
 

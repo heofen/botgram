@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -133,7 +134,7 @@ fun LoginScreen(
                 modifier = Modifier
                     .fillMaxWidth(0.4f)
                     .height(50.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(50.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary
                 )
@@ -154,3 +155,16 @@ fun LoginScreen(
     }
 }
 
+@Preview(showBackground = true, )
+@Composable
+fun LoginScreenPreview() {
+    MaterialTheme {
+        LoginScreen(
+            onCheckToken = { token ->
+                token.isNotEmpty()
+            },
+            onLoginSuccess = {
+            }
+        )
+    }
+}

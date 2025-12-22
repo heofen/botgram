@@ -1,7 +1,9 @@
 package com.heofen.botgram.ui.screens.chatlist
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.heofen.botgram.ui.components.ChatCell
 import com.heofen.botgram.ui.components.ChatListScreenBar
 import dev.chrisbanes.haze.HazeState
@@ -49,6 +52,10 @@ fun ChatListScreen(
                         onChatSellClick = {
                             onChatClick(chat.id)
                         }
+                    )
+                    Spacer(
+                        modifier = Modifier
+                            .height(8.dp)
                     )
                 }
             }

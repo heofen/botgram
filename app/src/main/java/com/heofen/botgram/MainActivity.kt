@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
         val mediaManager = MediaManager(applicationContext, bot)
 
         val chatRepository = ChatRepository(database.chatDao(), mediaManager)
-        val messageRepository = MessageRepository(database.messageDao())
+        val messageRepository = MessageRepository(database.messageDao(), bot)
         val userRepository = UserRepository(database.userDao(), mediaManager)
 
         setContent {

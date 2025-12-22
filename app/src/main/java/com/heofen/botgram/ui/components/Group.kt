@@ -1,24 +1,37 @@
 package com.heofen.botgram.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +57,7 @@ import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
 import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.utils.extensions.getInitials
+import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -86,15 +101,104 @@ fun UserAvatar(
 }
 
 @Composable
+fun MessageInput(
+    text: String,
+    hazeState: HazeState,
+    onTextChange: (String) -> Unit,
+    onSendClick: () -> Unit
+) {
+    val islandStyle = HazeStyle(
+        blurRadius = 20.dp,
+        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+        tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)),
+        noiseFactor = 0.05f
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+            .clip(RoundedCornerShape(27.dp))
+            .hazeEffect(state = hazeState, style = islandStyle)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(27.dp)
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .wrapContentHeight()
+            ) {
+                if (text.isEmpty()) {
+                    Text(
+                        "Сообщение...",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                BasicTextField(
+                    value = text,
+                    onValueChange = onTextChange,
+                    maxLines = 6,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = onSendClick,
+                enabled = text.isNotBlank(),
+                colors = IconButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = Color.Transparent,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Send",
+                )
+            }
+        }
+    }
+}
+
+
+
+@Composable
 fun GroupScreenBar(
     chat: Chat,
     hazeState: HazeState,
     onBackClick: () -> Unit = {}
 ) {
+    val islandStyle = HazeStyle(
+        blurRadius = 20.dp,
+        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
+        tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)),
+        noiseFactor = 0.05f
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
+            .windowInsetsPadding(WindowInsets.statusBars)
             .height(64.dp)
     ) {
         Row(
@@ -108,22 +212,20 @@ fun GroupScreenBar(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle(
-                            blurRadius = 40.dp,
-                            tint = HazeTint(Color.White.copy(alpha = 0.4f)),
-                            noiseFactor = 0.15f,
-                        )
-                    )
-                    .clickable{onBackClick},
+                    .hazeEffect(state = hazeState, style = islandStyle)
+                    .clickable { onBackClick() }
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(50.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowBackIosNew,
                     contentDescription = "Back",
-                    modifier = Modifier
-                        .size(30.dp)
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -131,20 +233,18 @@ fun GroupScreenBar(
                 modifier = Modifier
                     .weight(1f, fill = false)
                     .clip(RoundedCornerShape(50))
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle(
-                            blurRadius = 40.dp,
-                            tint = HazeTint(Color.White.copy(alpha = 0.4f)),
-                            noiseFactor = 0.15f,
-                        )
+                    .hazeEffect(state = hazeState, style = islandStyle)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(50.dp)
                     )
                     .padding(horizontal = 20.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val title: String = when {
+                val title = when {
                     chat.title != null -> chat.title
-                    else -> (chat.firstName ?: "") + " " + (chat.lastName ?: "")
+                    else -> "${chat.firstName ?: ""} ${chat.lastName ?: ""}"
                 }
                 Text(
                     text = title,
@@ -153,7 +253,8 @@ fun GroupScreenBar(
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -161,19 +262,17 @@ fun GroupScreenBar(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle(
-                            blurRadius = 40.dp,
-                            tint = HazeTint(Color.White.copy(alpha = 0.4f)),
-                            noiseFactor = 0.15f,
-                        )
-                    ),
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(50.dp)
+                    )
+                    .hazeEffect(state = hazeState, style = islandStyle),
                 contentAlignment = Alignment.Center
             ) {
                 ChatAvatar(
                     chat = chat,
-                    modifier = Modifier.size(50.dp)
+                    modifier = Modifier.size(40.dp)
                 )
             }
         }
@@ -198,9 +297,10 @@ fun MsgBubble(
         }
         Box(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 12.dp)
                 .background(
-                    color = if (!msg.isOutgoing) Color(0xFF90CAF9) else Color.Gray,
+                    color = if (!msg.isOutgoing) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.secondaryContainer ,
                     shape = RoundedCornerShape(16.dp)
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -214,6 +314,8 @@ fun MsgBubble(
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        color = if (!msg.isOutgoing) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
 
@@ -225,7 +327,8 @@ fun MsgBubble(
                             text = msg.text,
                             fontSize = 14.sp,
                             modifier = Modifier.weight(1f, fill = false),
-                            color = Color.Black
+                            color = if (!msg.isOutgoing) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     } else {
                         Text(
@@ -233,7 +336,8 @@ fun MsgBubble(
                             fontSize = 14.sp,
                             fontStyle = FontStyle.Italic,
                             modifier = Modifier.weight(1f, fill = false),
-                            color = Color.Black
+                            color = if (!msg.isOutgoing) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
 
@@ -248,7 +352,8 @@ fun MsgBubble(
                         text = formattedDate,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color.Gray
+                        color = if (!msg.isOutgoing) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                        else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
                     )
                 }
             }
@@ -326,6 +431,21 @@ fun GroupScreenBarPreview() {
         GroupScreenBar(
             chat = chat,
             hazeState = hazeState
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MessageInputPreview() {
+    val hazeState = remember { HazeState() }
+
+    BotgramTheme {
+        MessageInput(
+            text = "",
+            hazeState = hazeState,
+            onTextChange = {},
+            onSendClick = {}
         )
     }
 }

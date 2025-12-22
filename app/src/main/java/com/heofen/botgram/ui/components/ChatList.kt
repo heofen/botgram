@@ -94,6 +94,13 @@ fun ChatListScreenBar(
     onMenuClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
 ) {
+    val islandStyle = HazeStyle(
+        blurRadius = 20.dp,
+        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
+        tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)),
+        noiseFactor = 0.1f
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -113,11 +120,7 @@ fun ChatListScreenBar(
                     .clip(CircleShape)
                     .hazeEffect(
                         state = hazeState,
-                        style = HazeStyle(
-                            blurRadius = 40.dp,
-                            tint = HazeTint(Color.White.copy(alpha = 0.4f)),
-                            noiseFactor = 0.15f,
-                        )
+                        style = islandStyle
                     )
                     .clickable { onMenuClick },
                 contentAlignment = Alignment.Center
@@ -126,7 +129,8 @@ fun ChatListScreenBar(
                     imageVector = Icons.Default.Menu,
                     contentDescription = "Menu",
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(30.dp),
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -136,11 +140,7 @@ fun ChatListScreenBar(
                     .clip(RoundedCornerShape(50))
                     .hazeEffect(
                         state = hazeState,
-                        style = HazeStyle(
-                            blurRadius = 40.dp,
-                            tint = HazeTint(Color.White.copy(alpha = 0.4f)),
-                            noiseFactor = 0.15f,
-                        )
+                        style = islandStyle
                     )
                     .padding(horizontal = 20.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
@@ -152,7 +152,8 @@ fun ChatListScreenBar(
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -162,11 +163,7 @@ fun ChatListScreenBar(
                     .clip(CircleShape)
                     .hazeEffect(
                         state = hazeState,
-                        style = HazeStyle(
-                            blurRadius = 40.dp,
-                            tint = HazeTint(Color.White.copy(alpha = 0.4f)),
-                            noiseFactor = 0.15f,
-                        )
+                        style = islandStyle
                     )
                     .clickable { onSearchClick },
                 contentAlignment = Alignment.Center
@@ -175,7 +172,8 @@ fun ChatListScreenBar(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Search",
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(30.dp),
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -188,110 +186,106 @@ fun ChatCell(
     unreadedCount: Int = 0,
     onChatSellClick: (Long) -> Unit = {}
 ) {
-    Row(
+    Box(
         modifier = Modifier
-            .drawBehind {
-                drawLine(
-                    color = Color.Black,
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx()
-                )
-                drawLine(
-                    color = Color.Black,
-                    start = Offset(0f, size.height),
-                    end = Offset(size.width, size.height),
-                    strokeWidth = 1.dp.toPx()
-                )
-            }
-            .background(color = MaterialTheme.colorScheme.background)
-            .fillMaxWidth(1f)
-            .clickable { onChatSellClick(chat.id) }
-            .padding(8.dp)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.Center
     ) {
-        ChatAvatar(
-            chat = chat,
-            modifier = Modifier.size(50.dp)
-        )
-
-        Column(
+        Row(
             modifier = Modifier
-                .padding(
-                    horizontal = 8.dp,
-                    vertical = 2.dp
+                .background(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(16.dp)
                 )
+                .fillMaxWidth(0.96f)
+                .clickable { onChatSellClick(chat.id) }
+                .padding(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                val title: String = when {
-                    chat.title != null -> chat.title
-                    else -> (chat.firstName ?: "") + " " + (chat.lastName ?: "")
-                }
-                Text(
-                    text = title,
-                    overflow = TextOverflow.Ellipsis,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
+            ChatAvatar(
+                chat = chat,
+                modifier = Modifier.size(50.dp)
+            )
 
-                val instant = Instant.ofEpochMilli(chat.lastMessageTime ?: 0)
-                val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-
-                val formatter = DateTimeFormatter.ofPattern("HH:mm")
-                val formattedDate = dateTime.format(formatter)
-
-                Text(
-                    text = formattedDate,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(start = 10.dp)
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (chat.lastMessageType == MessageType.TEXT) {
-                    val preview = chat.lastMessageText
-                        ?: "⚠\uFE0F Тут явно что-то пошло не по плану"
-
-                    Text(
-                        text = preview,
-                        overflow = TextOverflow.Ellipsis,
-                        maxLines = 1,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Light,
-                        modifier = Modifier.weight(1f)
+            Column(
+                modifier = Modifier
+                    .padding(
+                        horizontal = 8.dp,
+                        vertical = 2.dp
                     )
-                } else {
-                    val preview: String = when (chat.lastMessageType) {
-                        MessageType.PHOTO -> "Photo"
-                        MessageType.VIDEO -> "Video"
-                        MessageType.ANIMATION -> "GIF"
-                        MessageType.AUDIO -> "Audio"
-                        MessageType.VOICE -> "Voice message"
-                        MessageType.VIDEO_NOTE -> "Video message"
-                        MessageType.DOCUMENT -> "Document"
-                        MessageType.STICKER -> "Sticker"
-                        MessageType.ANIMATED_STICKER -> "Sticker"
-                        MessageType.VIDEO_STICKER -> "Sticker"
-                        MessageType.CONTACT -> "Contact"
-                        MessageType.LOCATION -> "Location"
-                        else -> "⚠\uFE0F Тут явно что-то пошло не по плану"
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val title: String = when {
+                        chat.title != null -> chat.title
+                        else -> (chat.firstName ?: "") + " " + (chat.lastName ?: "")
                     }
                     Text(
-                        text = preview,
+                        text = title,
                         overflow = TextOverflow.Ellipsis,
                         maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+
+                    val instant = Instant.ofEpochMilli(chat.lastMessageTime ?: 0)
+                    val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+
+                    val formatter = DateTimeFormatter.ofPattern("HH:mm")
+                    val formattedDate = dateTime.format(formatter)
+
+                    Text(
+                        text = formattedDate,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Light,
-                        color = Color.Blue,
-                        modifier = Modifier.weight(1f)
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(start = 10.dp)
                     )
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (chat.lastMessageType == MessageType.TEXT) {
+                        val preview = chat.lastMessageText
+                            ?: "⚠\uFE0F Тут явно что-то пошло не по плану"
+
+                        Text(
+                            text = preview,
+                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 1,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Light,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    } else {
+                        val preview: String = when (chat.lastMessageType) {
+                            MessageType.PHOTO -> "Photo"
+                            MessageType.VIDEO -> "Video"
+                            MessageType.ANIMATION -> "GIF"
+                            MessageType.AUDIO -> "Audio"
+                            MessageType.VOICE -> "Voice message"
+                            MessageType.VIDEO_NOTE -> "Video message"
+                            MessageType.DOCUMENT -> "Document"
+                            MessageType.STICKER -> "Sticker"
+                            MessageType.ANIMATED_STICKER -> "Sticker"
+                            MessageType.VIDEO_STICKER -> "Sticker"
+                            MessageType.CONTACT -> "Contact"
+                            MessageType.LOCATION -> "Location"
+                            else -> "⚠\uFE0F Тут явно что-то пошло не по плану"
+                        }
+                        Text(
+                            text = preview,
+                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 1,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Light,
+                            color = Color.Blue,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
 //                Box(
 //                    modifier = Modifier
 //                        .size(24.dp)
@@ -305,6 +299,7 @@ fun ChatCell(
 //                        fontSize = 14.sp
 //                    )
 //                }
+                }
             }
         }
     }
