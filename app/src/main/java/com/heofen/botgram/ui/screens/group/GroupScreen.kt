@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,11 +59,12 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             LazyColumn(
                 modifier = Modifier
                     .hazeSource(state = hazeState)
+                    .imePadding()
                     .fillMaxSize(),
                 reverseLayout = true,
                 contentPadding = PaddingValues(
                     top = topContentPadding + 8.dp,
-                    bottom = bottomInputPadding + 8.dp,
+                    bottom = bottomInputPadding + 36.dp ,
                     start = statusBarPadding.calculateStartPadding(layoutDirection),
                     end = statusBarPadding.calculateEndPadding(layoutDirection)
                 )
@@ -94,6 +96,11 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
+
+            Spacer(
+                modifier = Modifier
+                    .height(8.dp)
+            )
         }
 
         uiState.chat?.let { chat ->
@@ -107,6 +114,8 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .imePadding()
+                .navigationBarsPadding()
                 .padding(bottom = 16.dp, start = 8.dp, end = 8.dp)
         ) {
             MessageInput(

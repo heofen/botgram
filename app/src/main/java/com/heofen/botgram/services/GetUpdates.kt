@@ -103,7 +103,7 @@ class GetUpdates : Service() {
         val mediaManager = MediaManager(applicationContext, bot)
         val db = AppDatabase.getDatabase(applicationContext)
 
-        messageRepo = MessageRepository(db.messageDao(), bot)
+        messageRepo = MessageRepository(db.messageDao(), bot, mediaManager)
         chatRepo = ChatRepository(db.chatDao(), mediaManager)
         userRepo = UserRepository(db.userDao(), mediaManager)
 
@@ -152,7 +152,6 @@ class GetUpdates : Service() {
             val msg = mapToMessage(message)
 
             val chatExists = chatRepo.chatExists(msg.chatId)
-
             if (!chatExists) {
                 val chat = mapToChat(message)
                 chatRepo.insertChat(chat)
@@ -174,20 +173,26 @@ class GetUpdates : Service() {
                         if (user != null) userRepo.insertUser(user)
                     }
                 }
-            } catch (e: kotlin.Exception) {
-                Log.e("User handle", "User handle err {}", e)
+            } catch (e: Exception) {
+                Log.e("User handle", "User handle err", e)
             }
 
             try {
                 messageRepo.insertMessage(msg)
-            } catch (e: kotlin.Exception) {
-                Log.e("msg handle", "msg handle err {}", e)
+
+                serviceScope.launch {
+                    messageRepo.ensureMediaDownloaded(msg)
+                }
+            } catch (e: Exception) {
+                Log.e("msg handle", "msg handle err", e)
             }
+
             Log.i("Handle message", "Success msg handle")
-        } catch (e: kotlin.Exception) {
-            Log.e("Handle message", "Error handling message: {}", e)
+        } catch (e: Exception) {
+            Log.e("Handle message", "Error handling message", e)
         }
     }
+
 
     @OptIn(PreviewFeature::class)
     private fun mapToUser(message: ContentMessage<MessageContent>): User? {

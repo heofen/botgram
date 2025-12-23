@@ -21,7 +21,7 @@ data class GroupUiState(
     val messages: List<Message> = emptyList(),
     val users: Map<Long, User> = emptyMap(),
     val isLoading: Boolean = true,
-    val messageText: String = "" // Added field for input text
+    val messageText: String = ""
 )
 
 class GroupViewModel(
@@ -71,6 +71,13 @@ class GroupViewModel(
             }
 
             messageRepository.getChatMessages(chatId).collect { messages ->
+
+                viewModelScope.launch(Dispatchers.IO) {
+                    messages.forEach { m ->
+                        messageRepository.ensureMediaDownloaded(m)
+                    }
+                }
+
                 val userIds = messages.mapNotNull { it.senderId }.distinct()
                 val users = mutableMapOf<Long, User>()
 

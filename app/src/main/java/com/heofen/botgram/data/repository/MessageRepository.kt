@@ -1,25 +1,26 @@
 package com.heofen.botgram.data.repository
 
 import android.util.Log
-import com.heofen.botgram.MessageType
+import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.database.dao.MessageDao
 import com.heofen.botgram.database.tables.Message
-import com.heofen.botgram.utils.toDbMessage
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.send.sendMessage
-import dev.inmo.tgbotapi.extensions.utils.extensions.raw.from
 import dev.inmo.tgbotapi.types.ChatId
 import dev.inmo.tgbotapi.types.RawChatId
-import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
-import dev.inmo.tgbotapi.types.message.content.PhotoContent
-import dev.inmo.tgbotapi.types.message.content.TextContent
-import dev.inmo.tgbotapi.types.toChatId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.io.File
 
 class MessageRepository(
     private val messageDao: MessageDao,
-    private val bot: TelegramBot
+    private val bot: TelegramBot,
+    private val mediaManager: MediaManager
 ) {
+
+    private val downloadSemaphore = Semaphore(permits = 3)
+
     fun getChatMessages(chatId: Long): Flow<List<Message>> =
         messageDao.getChatMessages(chatId)
 
@@ -65,17 +66,43 @@ class MessageRepository(
                 chatId = ChatId(RawChatId(chatId)),
                 text = text
             )
-
-            val dbMessage = sentMessage.toDbMessage(isOutgoing = true)
-
-            messageDao.insert(dbMessage)
-
-            Log.i("MessageRepository", "Message sent and saved: ${dbMessage.messageId}")
-
+            Log.i("MessageRepository", "Message sent: ${sentMessage.messageId.long}")
         } catch (e: Exception) {
             Log.e("MessageRepository", "Error sending message: ${e.message}")
-//            throw e
         }
     }
 
+    suspend fun ensureMediaDownloaded(message: Message) {
+        val fileId = message.fileId ?: return
+        val fileUniqueId = message.fileUniqueId ?: return
+        val ext = message.fileExtension ?: return
+
+        message.fileLocalPath?.let { path ->
+            if (File(path).exists()) return
+        }
+
+        val cached = findCachedMedia(fileUniqueId)
+        cached?.fileLocalPath?.let { cachedPath ->
+            if (File(cachedPath).exists()) {
+                updateFilePath(message.chatId, message.messageId, cachedPath)
+                return
+            }
+        }
+
+        downloadSemaphore.withPermit {
+            try {
+                val localPath = mediaManager.getFile(
+                    fileId = fileId,
+                    fileExtension = ext,
+                    fileUniqueId = fileUniqueId,
+                    isAvatar = false
+                )
+                if (localPath != null) {
+                    updateFilePath(message.chatId, message.messageId, localPath)
+                }
+            } catch (e: Exception) {
+                Log.e("MessageRepository", "Media download failed: ${e.message}")
+            }
+        }
+    }
 }

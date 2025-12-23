@@ -39,8 +39,11 @@ class MediaManager(
                 return file.absolutePath
             }
 
+            Log.d("MediaManager", "getFile start: id=$fileId uid=$fileUniqueId ext=$fileExtension")
             val fileInfo = bot.execute(GetFile(FileId(fileId)))
+            Log.d("MediaManager", "getFile got fileInfo: $fileInfo")
             bot.downloadFile(fileInfo, file)
+            Log.d("MediaManager", "getFile done: exists=${file.exists()} size=${file.length()} path=${file.absolutePath}")
 
             return if (file.exists() && file.length() > 0) {
                 file.absolutePath
