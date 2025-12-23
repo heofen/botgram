@@ -71,7 +71,3 @@ The application implements specific logic to handle Telegram's polymorphic conte
 4. The app validates the token via `https://api.telegram.org/bot<TOKEN>/getMe`.
    - **Success**: The token is saved, and you are redirected to the Chat List.
    - **Failure**: An error message is displayed (e.g., "Network error" or "Invalid token").
-
-## 📄 License
-
-[Add your license here, e.g., MIT, Apache 2.0]
