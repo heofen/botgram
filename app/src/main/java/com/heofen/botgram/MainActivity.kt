@@ -127,6 +127,13 @@ class MainActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onChatClick = { chatId ->
                                 navController.navigate("group/$chatId")
+                            },
+                            onLogOut = {
+                                tokenManager.clearToken()
+                                val stopIntent = Intent(applicationContext, GetUpdates::class.java)
+                                stopService(stopIntent)
+                                finish()
+                                startActivity(intent)
                             }
                         )
                     }
