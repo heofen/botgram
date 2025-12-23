@@ -52,4 +52,7 @@ interface ChatDao {
         fileUniqueId: String?,
         localPath: String?,
     )
+
+    @Query("SELECT * FROM chats WHERE title LIKE '%' || :query || '%' OR firstName LIKE '%' || :query || '%' OR lastName LIKE '%' || :query || '%' ORDER BY lastMessageTime DESC")
+    fun searchChats(query: String): Flow<List<Chat>>
 }

@@ -45,6 +45,8 @@ fun ChatListScreen(
     val hazeState = remember { HazeState() }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val isSearchActive by viewModel.isSearchActive.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -87,12 +89,11 @@ fun ChatListScreen(
                 ChatListScreenBar(
                     title = "Botgram",
                     hazeState = hazeState,
-                    onMenuClick = {
-                        scope.launch {
-                            drawerState.open()
-                        }
-                    },
-                    onSearchClick = { }
+                    isSearchActive = isSearchActive,
+                    searchQuery = searchQuery,
+                    onQueryChange = viewModel::onSearchQueryChange,
+                    onSearchToggle = viewModel::toggleSearch,
+                    onMenuClick = { scope.launch { drawerState.open() } }
                 )
             }
         ) { innerPadding ->

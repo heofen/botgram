@@ -44,4 +44,6 @@ class ChatRepository(
             chatDao.updateAvatar(chatId, fileId, null, localPath)
         }
     }
+
+    fun searchChats(query: String): Flow<List<Chat>> = chatDao.searchChats(query)
 }

@@ -12,10 +12,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -29,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -88,8 +93,11 @@ fun ChatAvatar(
 fun ChatListScreenBar(
     title: String,
     hazeState: HazeState,
+    isSearchActive: Boolean = false,
+    searchQuery: String = "",
+    onQueryChange: (String) -> Unit = {},
+    onSearchToggle: (Boolean) -> Unit = {},
     onMenuClick: () -> Unit = {},
-    onSearchClick: () -> Unit = {},
 ) {
     val islandStyle = HazeStyle(
         blurRadius = 20.dp,
@@ -115,61 +123,99 @@ fun ChatListScreenBar(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = islandStyle
-                    )
-                    .clickable { onMenuClick() },
+                    .hazeEffect(state = hazeState, style = islandStyle)
+                    .clickable {
+                        if (isSearchActive) onSearchToggle(false) else onMenuClick()
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Menu,
+                    imageVector = if (isSearchActive) Icons.Default.ArrowBackIosNew else Icons.Default.Menu,
                     contentDescription = "Menu",
-                    modifier = Modifier
-                        .size(30.dp),
+                    modifier = Modifier.size(if (isSearchActive) 24.dp else 30.dp),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             Box(
                 modifier = Modifier
-                    .weight(1f, fill = false)
-                    .clip(RoundedCornerShape(50))
-                    .hazeEffect(
-                        state = hazeState,
-                        style = islandStyle
-                    )
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Botgram",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Box(
+                    modifier = Modifier
+                        .then(if (isSearchActive) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(50))
+                        .hazeEffect(state = hazeState, style = islandStyle)
+                        .clickable(enabled = !isSearchActive) {
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSearchActive) {
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = onQueryChange,
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Start
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                            decorationBox = { innerTextField ->
+                                Box(
+                                    contentAlignment = Alignment.CenterStart,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                ) {
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            "Поиск...",
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp),
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
+                    } else {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
+                }
             }
 
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = islandStyle
-                    )
-                    .clickable { onSearchClick() },
+                    .hazeEffect(state = hazeState, style = islandStyle)
+                    .clickable {
+                        if (isSearchActive) {
+                            if (searchQuery.isNotEmpty()) onQueryChange("") else onSearchToggle(false)
+                        } else {
+                            onSearchToggle(true)
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector = if (isSearchActive && searchQuery.isNotEmpty()) Icons.Default.Close else Icons.Default.Search,
                     contentDescription = "Search",
-                    modifier = Modifier
-                        .size(30.dp),
+                    modifier = Modifier.size(30.dp),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -311,51 +357,5 @@ fun ChatCellPreview() {
             avatarLocalPath = null
         )
         ChatCell(chat)
-    }
-}
-
-
-@Preview(showBackground = true)
-@Composable
-fun ChatListScreenBarPreview() {
-    MaterialTheme {
-        val hazeState = remember { HazeState() }
-
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 90.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(10) { index ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(80.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Chat Item #$index")
-                        }
-                    }
-                }
-            }
-
-            ChatListScreenBar(
-                title = "Котобот",
-                hazeState = hazeState,
-                onMenuClick = { },
-                onSearchClick = { },
-            )
-        }
     }
 }
