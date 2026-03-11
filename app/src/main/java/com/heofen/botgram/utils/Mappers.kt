@@ -13,7 +13,10 @@ import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
 import dev.inmo.tgbotapi.types.message.content.*
 
 @OptIn(PreviewFeature::class, RiskFeature::class)
-fun ContentMessage<MessageContent>.toDbMessage(isOutgoing: Boolean = false): Message {
+fun ContentMessage<MessageContent>.toDbMessage(
+    isOutgoing: Boolean = false,
+    readStatus: Boolean = false
+): Message {
     return Message(
         messageId = this.messageId.long,
         chatId = this.chat.id.chatId.long,
@@ -47,11 +50,11 @@ fun ContentMessage<MessageContent>.toDbMessage(isOutgoing: Boolean = false): Mes
         mediaGroupId = this.media_group_id?.toString(),
 
         isOutgoing = isOutgoing,
-        readStatus = true
+        readStatus = readStatus
     )
 }
 
-private fun determineMessageType(content: MessageContent): MessageType {
+fun determineMessageType(content: MessageContent): MessageType {
     return when (content) {
         is TextContent -> MessageType.TEXT
         is PhotoContent -> MessageType.PHOTO

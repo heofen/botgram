@@ -4,6 +4,7 @@ import android.util.Log
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.database.dao.MessageDao
 import com.heofen.botgram.database.tables.Message
+import com.heofen.botgram.utils.toDbMessage
 import dev.inmo.tgbotapi.bot.TelegramBot
 import dev.inmo.tgbotapi.extensions.api.send.sendMessage
 import dev.inmo.tgbotapi.types.ChatId
@@ -60,15 +61,19 @@ class MessageRepository(
     suspend fun fileExists(fileUniqueId: String): Boolean =
         messageDao.fileExists(fileUniqueId)
 
-    suspend fun sendTextMessage(chatId: Long, text: String) {
-        try {
+    suspend fun sendTextMessage(chatId: Long, text: String): Message? {
+        return try {
             val sentMessage = bot.sendMessage(
                 chatId = ChatId(RawChatId(chatId)),
                 text = text
             )
+            val dbMessage = sentMessage.toDbMessage(isOutgoing = true, readStatus = true)
+            messageDao.insert(dbMessage)
             Log.i("MessageRepository", "Message sent: ${sentMessage.messageId.long}")
+            dbMessage
         } catch (e: Exception) {
             Log.e("MessageRepository", "Error sending message: ${e.message}")
+            null
         }
     }
 

@@ -85,13 +85,16 @@ class MediaManager(
             val photo = when (chat) {
                 is ExtendedPrivateChat -> chat.chatPhoto
                 is ExtendedPublicChat -> chat.chatPhoto
+                is ExtendedGroupChat -> chat.chatPhoto
+                is ExtendedSupergroupChat -> chat.chatPhoto
+                is ExtendedChannelChat -> chat.chatPhoto
                 else -> null
             }
 
             if (photo == null) return null to null
 
             val fileId = photo.bigFileId
-            val fileUniqueId = photo.bigFileId
+            val fileUniqueId = photo.bigFileUniqueId.toString()
 
             val localPath = getFile(fileId, "jpg", fileUniqueId, isAvatar = true)
 

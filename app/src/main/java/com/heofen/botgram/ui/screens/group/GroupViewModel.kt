@@ -50,8 +50,16 @@ class GroupViewModel(
             try {
                 _uiState.update { it.copy(messageText = "") }
 
-                messageRepository.sendTextMessage(chatId, text)
-
+                val sentMessage = messageRepository.sendTextMessage(chatId, text)
+                if (sentMessage != null) {
+                    chatRepository.updateLastMessage(
+                        chatId = sentMessage.chatId,
+                        type = sentMessage.type,
+                        text = sentMessage.text ?: sentMessage.caption,
+                        time = sentMessage.timestamp,
+                        senderId = sentMessage.senderId
+                    )
+                }
 
             } catch (e: Exception) {
                 Log.e("GroupViewModel", "Failed to send message", e)

@@ -11,7 +11,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.heofen.botgram.ChatType
-import com.heofen.botgram.MessageType
 import com.heofen.botgram.R
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.data.local.TokenManager
@@ -20,25 +19,21 @@ import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.database.AppDatabase
 import com.heofen.botgram.database.tables.Chat
-import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
+import com.heofen.botgram.utils.determineMessageType
+import com.heofen.botgram.utils.toDbMessage
 import dev.inmo.tgbotapi.bot.ktor.KtorRequestsExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onChatMemberUpdated
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onContentMessage
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onEditedContentMessage
-import dev.inmo.tgbotapi.extensions.utils.asMediaContent
-import dev.inmo.tgbotapi.extensions.utils.asMediaGroupContent
 import dev.inmo.tgbotapi.extensions.utils.asTextContent
-import dev.inmo.tgbotapi.extensions.utils.extensions.raw.edit_date
-import dev.inmo.tgbotapi.extensions.utils.extensions.raw.media_group_id
-import dev.inmo.tgbotapi.extensions.utils.extensions.raw.reply_to_message
 import dev.inmo.tgbotapi.extensions.utils.fromUserOrNull
-import dev.inmo.tgbotapi.extensions.utils.thumbedMediaFileOrNull
 import dev.inmo.tgbotapi.extensions.utils.usernameChatOrNull
 import dev.inmo.tgbotapi.types.chat.ChannelChatImpl
 import dev.inmo.tgbotapi.types.chat.ExtendedPrivateChat
@@ -46,22 +41,10 @@ import dev.inmo.tgbotapi.types.chat.GroupChatImpl
 import dev.inmo.tgbotapi.types.chat.PrivateChatImpl
 import dev.inmo.tgbotapi.types.chat.SupergroupChatImpl
 import dev.inmo.tgbotapi.types.message.abstracts.ContentMessage
-import dev.inmo.tgbotapi.types.message.content.AnimationContent
-import dev.inmo.tgbotapi.types.message.content.AudioContent
-import dev.inmo.tgbotapi.types.message.content.ContactContent
-import dev.inmo.tgbotapi.types.message.content.DocumentContent
-import dev.inmo.tgbotapi.types.message.content.LocationContent
 import dev.inmo.tgbotapi.types.message.content.MessageContent
-import dev.inmo.tgbotapi.types.message.content.PhotoContent
-import dev.inmo.tgbotapi.types.message.content.StickerContent
-import dev.inmo.tgbotapi.types.message.content.TextContent
-import dev.inmo.tgbotapi.types.message.content.VideoContent
-import dev.inmo.tgbotapi.types.message.content.VideoNoteContent
-import dev.inmo.tgbotapi.types.message.content.VoiceContent
 import dev.inmo.tgbotapi.utils.PreviewFeature
 import dev.inmo.tgbotapi.utils.RiskFeature
 import dev.inmo.tgbotapi.utils.TelegramAPIUrlsKeeper
-import dev.inmo.tgbotapi.utils.extensions.threadIdOrNull
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.cancel
@@ -76,11 +59,10 @@ class GetUpdates : Service() {
     private lateinit var messageRepo: MessageRepository
     private lateinit var chatRepo: ChatRepository
     private lateinit var userRepo: UserRepository
-
-    override fun onCreate() {
-        super.onCreate()
-
-    }
+    private var httpClient: HttpClient? = null
+    private var bot: KtorRequestsExecutor? = null
+    private var pollingJob: Job? = null
+    private var currentToken: String? = null
 
 
     @SuppressLint("ForegroundServiceType")
@@ -97,24 +79,40 @@ class GetUpdates : Service() {
             return START_NOT_STICKY
         }
 
-        val client = HttpClient(OkHttp)
-        val urlsKeeper = TelegramAPIUrlsKeeper(token)
-        val bot = KtorRequestsExecutor(urlsKeeper, client)
-        val mediaManager = MediaManager(applicationContext, bot)
+        if (currentToken != token) {
+            pollingJob?.cancel()
+            pollingJob = null
+
+            httpClient?.close()
+            httpClient = HttpClient(OkHttp)
+            bot = KtorRequestsExecutor(TelegramAPIUrlsKeeper(token), httpClient!!)
+            currentToken = token
+        }
+
+        val activeBot = bot
+        if (activeBot == null) {
+            Log.e("GetUpdates", "Bot is not initialized. Stopping service.")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        val mediaManager = MediaManager(applicationContext, activeBot)
         val db = AppDatabase.getDatabase(applicationContext)
 
-        messageRepo = MessageRepository(db.messageDao(), bot, mediaManager)
+        messageRepo = MessageRepository(db.messageDao(), activeBot, mediaManager)
         chatRepo = ChatRepository(db.chatDao(), mediaManager)
         userRepo = UserRepository(db.userDao(), mediaManager)
 
-        serviceScope.launch {
-            while (isActive) {
-                try {
-                    Log.i("GetUpdates", "Launching Long Polling...")
-                    startBot(token)
-                } catch (e: Exception) {
-                    Log.e("GetUpdates", "Bot crashed: ${e.message}. Restart from 5 sec...")
-                    delay(5000)
+        if (pollingJob?.isActive != true) {
+            pollingJob = serviceScope.launch {
+                while (isActive) {
+                    try {
+                        Log.i("GetUpdates", "Launching Long Polling...")
+                        startBot(activeBot)
+                    } catch (e: Exception) {
+                        Log.e("GetUpdates", "Bot crashed: ${e.message}. Restart from 5 sec...")
+                        delay(5000)
+                    }
                 }
             }
         }
@@ -122,17 +120,7 @@ class GetUpdates : Service() {
         return START_STICKY
     }
 
-    private suspend fun startBot(token: String) {
-        // НИКОГДА НЕ ТРОГАЙ КОД НИЖЕ. НЕ ПРИ КАКИХ ОБСТОЯТЕЛЬСТВАХ
-        val client = HttpClient(OkHttp)
-
-        val urlsKeeper = TelegramAPIUrlsKeeper(token)
-
-        val bot = KtorRequestsExecutor(
-            telegramAPIUrlsKeeper = urlsKeeper,
-            client = client
-        )
-
+    private suspend fun startBot(bot: KtorRequestsExecutor) {
         bot.buildBehaviourWithLongPolling {
             onContentMessage { msg ->
                 launch { handleMessage(msg) }
@@ -149,7 +137,7 @@ class GetUpdates : Service() {
 
     private suspend fun handleMessage(message: ContentMessage<MessageContent>) {
         try {
-            val msg = mapToMessage(message)
+            val msg = message.toDbMessage(isOutgoing = false, readStatus = false)
 
             val chatExists = chatRepo.chatExists(msg.chatId)
             if (!chatExists) {
@@ -254,218 +242,6 @@ class GetUpdates : Service() {
         )
     }
 
-    // маппинг из ktg msg в энтити из приложения
-    @OptIn(PreviewFeature::class, RiskFeature::class)
-    private fun mapToMessage(message: ContentMessage<MessageContent>): Message{
-        return Message(
-            messageId = message.messageId.long,
-            chatId = message.chat.id.chatId.long,
-            topicId = message.threadIdOrNull?.long,
-            senderId = message.fromUserOrNull()?.user?.id?.chatId?.long,
-            type = determineMessageType(message.content),
-            timestamp = message.date.unixMillisLong,
-
-            text = message.content.asTextContent()?.text,
-            caption = message.content.asMediaGroupContent()?.text
-                ?: message.content.asMediaContent()?.asTextContent()?.text,
-
-            replyMsgId = message.reply_to_message?.messageId?.long,
-            replyMsgTopicId = message.threadIdOrNull?.long,
-
-            fileName = extractFileName(message.content),
-            fileExtension = extractFileExtension(message.content),
-            fileId = extractFileId(message.content),
-            fileUniqueId = extractFileUniqueId(message.content),
-            fileLocalPath = null,
-            fileSize = extractFileSize(message.content),
-
-            width = extractMediaWidth(message.content),
-            height = extractMediaHeight(message.content),
-            duration = extractMediaDuration(message.content),
-            thumbnailFileId = extractThumbnailFileId(message.content),
-
-            isEdited = message.edit_date != null,
-            editedAt = message.edit_date?.asDate?.unixMillisLong,
-
-            mediaGroupId = message.media_group_id?.toString(),
-
-            isOutgoing = false
-        )
-    }
-
-    private fun extractFileExtension(content: MessageContent): String? {
-        return when(content) {
-            is DocumentContent -> {
-                content.media.fileName?.substringAfterLast('.', "")
-                    ?: getMimeTypeExtension(content.media.mimeType?.raw)
-            }
-            is AudioContent -> {
-                content.media.fileName?.substringAfterLast('.', "")
-                    ?: "mp3"
-            }
-
-            is PhotoContent -> "jpg"
-            is VideoContent -> "mp4"
-            is AnimationContent -> "mp4"
-            is VoiceContent -> "ogg"
-            is VideoNoteContent -> "mp4"
-            is StickerContent -> when {
-                content.media.isAnimated -> "tgs"
-                content.media.isVideo -> "webm"
-                else -> "webp"
-            }
-
-            else -> null
-        }
-    }
-
-    private fun getMimeTypeExtension(mimeType: String?): String {
-        return when(mimeType) {
-            "image/jpeg" -> "jpg"
-            "image/png" -> "png"
-            "image/gif" -> "gif"
-            "image/webp" -> "webp"
-            "video/mp4" -> "mp4"
-            "video/mpeg" -> "mpeg"
-            "audio/mpeg" -> "mp3"
-            "audio/ogg" -> "ogg"
-            "application/pdf" -> "pdf"
-            "application/zip" -> "zip"
-            "application/x-rar-compressed" -> "rar"
-            "text/plain" -> "txt"
-            else -> "bin"
-        }
-    }
-
-    private fun extractFileName(content: MessageContent): String? {
-        return when(content) {
-            is DocumentContent -> content.media.fileName
-            is AudioContent -> content.media.fileName
-
-            is PhotoContent -> null
-            is VideoContent -> null
-            is VoiceContent -> null
-            is StickerContent -> null
-            is AnimationContent -> null
-            is VideoNoteContent -> null
-            else -> null
-        }
-    }
-
-
-    private fun extractThumbnailFileId(content: MessageContent): String? {
-        return when(content) {
-            is PhotoContent -> content.media.thumbedMediaFileOrNull()?.fileId?.fileId
-            is VideoContent -> content.media.thumbnail?.fileId?.fileId
-            is AnimationContent -> content.media.thumbnail?.fileId?.fileId
-            is DocumentContent -> content.media.thumbnail?.fileId?.fileId
-            is AudioContent -> content.media.thumbnail?.fileId?.fileId
-            is VideoNoteContent -> content.media.thumbnail?.fileId?.fileId
-            is StickerContent -> content.media.thumbnail?.fileId?.fileId
-            else -> null
-        }
-    }
-
-    private fun extractMediaDuration(content: MessageContent): Long? {
-        return when(content) {
-            is VideoContent -> content.media.duration
-            is VideoNoteContent -> content.media.duration
-            is AnimationContent -> content.media.duration
-            is AudioContent -> content.media.duration
-            is VoiceContent -> content.media.duration
-            else -> null
-        }
-    }
-
-    private fun extractMediaWidth(content: MessageContent): Int? {
-        return when(content) {
-            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.width
-            is VideoContent -> content.media.width
-            is AnimationContent -> content.media.width
-            is VideoNoteContent -> content.media.width
-            is StickerContent -> content.media.width
-            else -> null
-        }
-    }
-
-    private fun extractMediaHeight(content: MessageContent): Int? {
-        return when(content) {
-            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.height
-            is VideoContent -> content.media.height
-            is AnimationContent -> content.media.height
-            is VideoNoteContent -> content.media.height
-            is StickerContent -> content.media.height
-            else -> null
-        }
-    }
-
-    private fun extractFileId(content: MessageContent): String? {
-        return when(content) {
-            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileId?.fileId
-            is VideoContent -> content.media.fileId.fileId
-            is AnimationContent -> content.media.fileId.fileId
-            is AudioContent -> content.media.fileId.fileId
-            is VoiceContent -> content.media.fileId.fileId
-            is VideoNoteContent -> content.media.fileId.fileId
-            is DocumentContent -> content.media.fileId.fileId
-            is StickerContent -> content.media.fileId.fileId
-            else -> null
-        }
-    }
-
-    private fun extractFileUniqueId(content: MessageContent): String? {
-        return when(content) {
-            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileUniqueId.toString()
-            is VideoContent -> content.media.fileUniqueId.toString()
-            is AnimationContent -> content.media.fileUniqueId.toString()
-            is AudioContent -> content.media.fileUniqueId.toString()
-            is VoiceContent -> content.media.fileUniqueId.toString()
-            is VideoNoteContent -> content.media.fileUniqueId.toString()
-            is DocumentContent -> content.media.fileUniqueId.toString()
-            is StickerContent -> content.media.fileUniqueId.toString()
-            else -> null
-        }
-    }
-
-    private fun extractFileSize(content: MessageContent): Long? {
-        return when(content) {
-            is PhotoContent -> content.mediaCollection.maxByOrNull { it.width }?.fileSize
-            is VideoContent -> content.media.fileSize
-            is AnimationContent -> content.media.fileSize
-            is AudioContent -> content.media.fileSize
-            is VoiceContent -> content.media.fileSize
-            is VideoNoteContent -> content.media.fileSize
-            is DocumentContent -> content.media.fileSize
-            is StickerContent -> content.media.fileSize
-            else -> null
-        }
-    }
-
-
-    private fun determineMessageType(content: MessageContent): MessageType {
-        return when (content) {
-            is TextContent -> MessageType.TEXT
-            is PhotoContent -> MessageType.PHOTO
-            is VideoContent -> MessageType.VIDEO
-            is AnimationContent -> MessageType.ANIMATION
-            is AudioContent -> MessageType.AUDIO
-            is VoiceContent -> MessageType.VOICE
-            is VideoNoteContent -> MessageType.VIDEO_NOTE
-            is DocumentContent -> MessageType.DOCUMENT
-            is StickerContent -> {
-                when {
-                    content.media.isAnimated -> MessageType.ANIMATED_STICKER
-                    content.media.isVideo -> MessageType.VIDEO_STICKER
-                    else -> MessageType.STICKER
-                }
-            }
-
-            is ContactContent -> MessageType.CONTACT
-            is LocationContent -> MessageType.LOCATION
-            else -> MessageType.TEXT
-        }
-    }
-
     private fun createNotification(): Notification {
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -488,6 +264,12 @@ class GetUpdates : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        pollingJob?.cancel()
+        pollingJob = null
+        httpClient?.close()
+        httpClient = null
+        bot = null
+        currentToken = null
         serviceScope.cancel()
     }
 
