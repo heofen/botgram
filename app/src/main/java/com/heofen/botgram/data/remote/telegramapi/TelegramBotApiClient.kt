@@ -1,7 +1,11 @@
 package com.heofen.botgram.data.remote.telegramapi
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Cache
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -10,7 +14,9 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 class TelegramApiException(
     message: String,
@@ -23,6 +29,7 @@ class TelegramBotApiClient(
     private val token: String,
     private val client: OkHttpClient = OkHttpClient()
 ) {
+    private val isClosed = AtomicBoolean(false)
     private val longPollingClient = client.newBuilder()
         .readTimeout(65, TimeUnit.SECONDS)
         .build()
@@ -104,12 +111,38 @@ class TelegramBotApiClient(
     }
 
     fun close() {
-        longPollingClient.dispatcher.executorService.shutdown()
-        longPollingClient.connectionPool.evictAll()
-        longPollingClient.cache?.close()
-        client.dispatcher.executorService.shutdown()
-        client.connectionPool.evictAll()
-        client.cache?.close()
+        if (!isClosed.compareAndSet(false, true)) return
+
+        thread(
+            start = true,
+            isDaemon = true,
+            name = "TelegramBotApiClient-close"
+        ) {
+            runCatching {
+                shutdownResources(longPollingClient, client)
+            }.onFailure {
+                Log.w("TelegramBotApiClient", "Failed to close clients cleanly", it)
+            }
+        }
+    }
+
+    private fun shutdownResources(vararg clients: OkHttpClient) {
+        val dispatchers = linkedSetOf<Dispatcher>()
+        val pools = linkedSetOf<ConnectionPool>()
+        val caches = linkedSetOf<Cache>()
+
+        clients.forEach { httpClient ->
+            dispatchers += httpClient.dispatcher
+            pools += httpClient.connectionPool
+            httpClient.cache?.let(caches::add)
+        }
+
+        dispatchers.forEach { dispatcher ->
+            dispatcher.cancelAll()
+            dispatcher.executorService.shutdown()
+        }
+        pools.forEach(ConnectionPool::evictAll)
+        caches.forEach(Cache::close)
     }
 
     private suspend fun getJson(httpUrl: okhttp3.HttpUrl): JSONObject = withContext(Dispatchers.IO) {

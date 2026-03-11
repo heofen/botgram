@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -27,11 +27,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import com.heofen.botgram.ChatType
+import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.ui.components.GroupScreenBar
+import com.heofen.botgram.ui.components.MessageDateDivider
 import com.heofen.botgram.ui.components.MessageInput
 import com.heofen.botgram.ui.components.MsgBubble
+import com.heofen.botgram.ui.components.MsgBubbleClusterPosition
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlin.math.abs
 
 @Composable
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
@@ -48,6 +55,9 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
         } else {
             val isPersonalChat = uiState.chat?.type == ChatType.PRIVATE
             val layoutDirection = LocalLayoutDirection.current
+            val messagesById = remember(uiState.messages) {
+                uiState.messages.associateBy { it.messageId }
+            }
 
             val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
             val topContentPadding = statusBarPadding.calculateTopPadding() + 64.dp
@@ -68,20 +78,48 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 )
             ) {
 
-                items(
+                itemsIndexed(
                     items = uiState.messages,
-                    key = { it.chatId to it.messageId }
-                ) { message ->
+                    key = { _, it -> it.chatId to it.messageId }
+                ) { index, message ->
+                    val olderMessage = uiState.messages.getOrNull(index + 1)
+                    val newerMessage = uiState.messages.getOrNull(index - 1)
+                    val isGroupedWithOlder = olderMessage?.let { shouldClusterMessages(message, it) } == true
+                    val isGroupedWithNewer = newerMessage?.let { shouldClusterMessages(message, it) } == true
+                    val clusterPosition = when {
+                        isGroupedWithOlder && isGroupedWithNewer -> MsgBubbleClusterPosition.Middle
+                        isGroupedWithOlder -> MsgBubbleClusterPosition.Bottom
+                        isGroupedWithNewer -> MsgBubbleClusterPosition.Top
+                        else -> MsgBubbleClusterPosition.Single
+                    }
+
                     val senderId = message.senderId
                     val foundSender = senderId?.let { uiState.users[it] }
+                    val replyToMessage = message.replyMsgId?.let { replyId ->
+                        messagesById[replyId]
+                    }
+                    val replyToSender = replyToMessage?.senderId?.let { uiState.users[it] }
+                    val showDateHeader = olderMessage == null || !isSameCalendarDay(message, olderMessage)
+                    val showAvatar = !isPersonalChat && !message.isOutgoing && !isGroupedWithNewer
+                    val showSenderName = !isPersonalChat && !message.isOutgoing && !isGroupedWithOlder
+                    val itemSpacing = if (isGroupedWithNewer) 2.dp else 12.dp
+
+                    if (showDateHeader) {
+                        MessageDateDivider(timestamp = message.timestamp)
+                    }
 
                     MsgBubble(
                         msg = message,
                         sender = foundSender,
-                        isPersonalMsg = isPersonalChat
+                        replyToMessage = replyToMessage,
+                        replySender = replyToSender,
+                        isPersonalMsg = isPersonalChat,
+                        showAvatar = showAvatar,
+                        showSenderName = showSenderName,
+                        clusterPosition = clusterPosition
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(itemSpacing))
                 }
             }
 
@@ -115,3 +153,19 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
         }
     }
 }
+
+private const val MESSAGE_CLUSTER_WINDOW_MS = 5 * 60 * 1000L
+
+private fun shouldClusterMessages(current: Message, neighbour: Message): Boolean {
+    if (current.isOutgoing != neighbour.isOutgoing) return false
+    if (current.senderId != neighbour.senderId) return false
+    if (!isSameCalendarDay(current, neighbour)) return false
+
+    return abs(current.timestamp - neighbour.timestamp) <= MESSAGE_CLUSTER_WINDOW_MS
+}
+
+private fun isSameCalendarDay(first: Message, second: Message): Boolean =
+    messageDay(first.timestamp) == messageDay(second.timestamp)
+
+private fun messageDay(timestamp: Long): LocalDate =
+    Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
