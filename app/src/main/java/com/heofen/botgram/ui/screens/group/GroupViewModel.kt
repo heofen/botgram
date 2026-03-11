@@ -10,11 +10,13 @@ import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class GroupUiState(
     val chat: Chat? = null,
@@ -30,6 +32,8 @@ class GroupViewModel(
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository
 ) : ViewModel() {
+    private val mediaLoadRequested = mutableSetOf<Pair<Long, Long>>()
+    private val userAvatarLoadRequested = mutableSetOf<Long>()
 
     private val _uiState = MutableStateFlow(GroupUiState())
     val uiState: StateFlow<GroupUiState> = _uiState.asStateFlow()
@@ -78,34 +82,39 @@ class GroupViewModel(
                 }
             }
 
-            messageRepository.getChatMessages(chatId).collect { messages ->
-
-                viewModelScope.launch(Dispatchers.IO) {
-                    messages.forEach { m ->
-                        messageRepository.ensureMediaDownloaded(m)
-                    }
-                }
-
+            messageRepository.getChatMessages(chatId).collectLatest { messages ->
+                val orderedMessages = messages.asReversed()
                 val userIds = messages.mapNotNull { it.senderId }.distinct()
-                val users = mutableMapOf<Long, User>()
-
-                userIds.forEach { userId ->
-                    val user = userRepository.getById(userId)
-
-                    if (user != null) {
-                        users[userId] = user
-                        viewModelScope.launch(Dispatchers.IO) {
-                            userRepository.loadAvatarIfMissing(userId)
+                val users = withContext(Dispatchers.IO) {
+                    val loaded = mutableMapOf<Long, User>()
+                    userIds.forEach { userId ->
+                        userRepository.getById(userId)?.let { user ->
+                            loaded[userId] = user
                         }
                     }
+                    loaded
                 }
 
                 _uiState.update {
                     it.copy(
-                        messages = messages,
+                        messages = orderedMessages,
                         users = users,
                         isLoading = false
                     )
+                }
+
+                withContext(Dispatchers.IO) {
+                    messages.forEach { message ->
+                        val key = message.chatId to message.messageId
+                        if (mediaLoadRequested.add(key)) {
+                            messageRepository.ensureMediaDownloaded(message)
+                        }
+                    }
+                    userIds.forEach { userId ->
+                        if (userAvatarLoadRequested.add(userId)) {
+                            userRepository.loadAvatarIfMissing(userId)
+                        }
+                    }
                 }
             }
         }

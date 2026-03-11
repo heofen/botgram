@@ -35,10 +35,10 @@ class UserRepository(
             if (file.exists()) return
         }
 
-        val (fileId, localPath) = mediaManager.downloadUserAvatar(userId)
+        val avatar = mediaManager.downloadUserAvatar(userId) ?: return
 
-        if (localPath != null) {
-            userDao.updateAvatar(userId, fileId, null, localPath)
+        if (avatar.localPath != null) {
+            userDao.updateAvatar(userId, avatar.fileId, avatar.fileUniqueId, avatar.localPath)
         }
     }
 }

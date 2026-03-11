@@ -10,15 +10,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class ChatListViewModel(
     private val chatRepository: ChatRepository
 ) : ViewModel() {
+    private val avatarLoadRequested = mutableSetOf<Long>()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -35,18 +35,23 @@ class ChatListViewModel(
                 chatRepository.searchChats(query)
             }
         }
-        .onEach { chats ->
-            viewModelScope.launch(Dispatchers.IO) {
-                chats.take(20).forEach { chat ->
-                    chatRepository.loadAvatarIfMissing(chat.id)
-                }
-            }
-        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            chatListState.collectLatest { chats ->
+                chats.take(20).forEach { chat ->
+                    if (avatarLoadRequested.add(chat.id)) {
+                        chatRepository.loadAvatarIfMissing(chat.id)
+                    }
+                }
+            }
+        }
+    }
 
     fun onSearchQueryChange(newQuery: String) {
         _searchQuery.value = newQuery

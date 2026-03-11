@@ -17,6 +17,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.data.local.TokenManager
+import com.heofen.botgram.data.remote.TelegramGateway
+import com.heofen.botgram.data.remote.TelegramGatewayFactory
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
@@ -28,11 +30,6 @@ import com.heofen.botgram.ui.screens.group.GroupScreen
 import com.heofen.botgram.ui.screens.group.GroupViewModel
 import com.heofen.botgram.ui.screens.login.LoginScreen
 import com.heofen.botgram.ui.theme.BotgramTheme
-import dev.inmo.tgbotapi.bot.ktor.KtorRequestsExecutor
-import dev.inmo.tgbotapi.extensions.api.telegramBot
-import dev.inmo.tgbotapi.utils.TelegramAPIUrlsKeeper
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -40,6 +37,8 @@ import okhttp3.Request
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
+
+    private var gateway: TelegramGateway? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,7 +62,6 @@ class MainActivity : ComponentActivity() {
                                     if (!response.isSuccessful) return@withContext false
 
                                     val responseBody = response.body?.string() ?: return@withContext false
-
                                     val json = JSONObject(responseBody)
                                     val isOk = json.optBoolean("ok", false)
 
@@ -83,26 +81,24 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onLoginSuccess = {
-                        val intent = intent
+                        val restartIntent = intent
                         finish()
-                        startActivity(intent)
+                        startActivity(restartIntent)
                     }
                 )
             }
             return
         }
 
-
         startUpdateService()
 
         val database = AppDatabase.getDatabase(applicationContext)
-        val httpClient = HttpClient(OkHttp)
-
-        val bot = KtorRequestsExecutor(TelegramAPIUrlsKeeper(token), httpClient)
-        val mediaManager = MediaManager(applicationContext, bot)
+        gateway = TelegramGatewayFactory.create(applicationContext, token)
+        val activeGateway = requireNotNull(gateway)
+        val mediaManager = MediaManager(activeGateway)
 
         val chatRepository = ChatRepository(database.chatDao(), mediaManager)
-        val messageRepository = MessageRepository(database.messageDao(), bot, mediaManager)
+        val messageRepository = MessageRepository(database.messageDao(), activeGateway, mediaManager)
         val userRepository = UserRepository(database.userDao(), mediaManager)
 
         setContent {
@@ -173,5 +169,11 @@ class MainActivity : ComponentActivity() {
     private fun startUpdateService() {
         val intent = Intent(this, GetUpdates::class.java)
         ContextCompat.startForegroundService(this, intent)
+    }
+
+    override fun onDestroy() {
+        gateway?.close()
+        gateway = null
+        super.onDestroy()
     }
 }

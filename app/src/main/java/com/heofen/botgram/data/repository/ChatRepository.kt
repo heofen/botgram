@@ -38,10 +38,10 @@ class ChatRepository(
             if (File(chat.avatarLocalPath).exists()) return
         }
 
-        val (fileId, localPath) = mediaManager.downloadChatAvatar(chatId)
+        val avatar = mediaManager.downloadChatAvatar(chatId) ?: return
 
-        if (localPath != null) {
-            chatDao.updateAvatar(chatId, fileId, null, localPath)
+        if (avatar.localPath != null) {
+            chatDao.updateAvatar(chatId, avatar.fileId, avatar.fileUniqueId, avatar.localPath)
         }
     }
 

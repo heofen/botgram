@@ -147,7 +147,7 @@ fun MessageInput(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
@@ -299,7 +299,7 @@ fun GroupScreenBar(
 @Composable
 fun MsgBubble(
     msg: Message,
-    sender: User,
+    sender: User?,
     isPersonalMsg: Boolean = false
 ) {
     Row(
@@ -336,7 +336,9 @@ fun MsgBubble(
                 modifier = Modifier.wrapContentWidth()
             ) {
                 if (!isPersonalMsg && !msg.isOutgoing) {
-                    val name = (sender.firstName) + " " + (sender.lastName ?: "")
+                    val name = listOfNotNull(sender?.firstName, sender?.lastName)
+                        .joinToString(" ")
+                        .ifBlank { "Unknown" }
                     Text(
                         text = name,
                         fontSize = 14.sp,

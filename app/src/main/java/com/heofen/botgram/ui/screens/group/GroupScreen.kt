@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import com.heofen.botgram.ChatType
-import com.heofen.botgram.database.tables.User
 import com.heofen.botgram.ui.components.GroupScreenBar
 import com.heofen.botgram.ui.components.MessageInput
 import com.heofen.botgram.ui.components.MsgBubble
@@ -71,25 +69,15 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             ) {
 
                 items(
-                    items = uiState.messages.reversed(),
+                    items = uiState.messages,
                     key = { it.chatId to it.messageId }
                 ) { message ->
                     val senderId = message.senderId
                     val foundSender = senderId?.let { uiState.users[it] }
 
-                    val displaySender = foundSender ?: User(
-                        id = senderId ?: 0L,
-                        firstName = "Unknown",
-                        lastName = null,
-                        bio = null,
-                        avatarFileId = null,
-                        avatarFileUniqueId = null,
-                        avatarLocalPath = null
-                    )
-
                     MsgBubble(
                         msg = message,
-                        sender = displaySender,
+                        sender = foundSender,
                         isPersonalMsg = isPersonalChat
                     )
 
