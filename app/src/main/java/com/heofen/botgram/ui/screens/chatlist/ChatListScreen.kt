@@ -103,7 +103,9 @@ fun ChatListScreen(
                     .hazeSource(state = hazeState)
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
                     contentPadding = innerPadding
                 ) {
                     items(chats, key = { it.chat.id }) { chat ->

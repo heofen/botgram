@@ -44,6 +44,7 @@ import kotlin.math.abs
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val hazeState = remember { HazeState() }
+    val horizontalContentPadding = 12.dp
 
     Box(
         modifier = Modifier
@@ -72,9 +73,9 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 reverseLayout = true,
                 contentPadding = PaddingValues(
                     top = topContentPadding + 8.dp,
-                    bottom = bottomInputPadding + 36.dp ,
-                    start = statusBarPadding.calculateStartPadding(layoutDirection),
-                    end = statusBarPadding.calculateEndPadding(layoutDirection)
+                    bottom = bottomInputPadding + 36.dp,
+                    start = statusBarPadding.calculateStartPadding(layoutDirection) + horizontalContentPadding,
+                    end = statusBarPadding.calculateEndPadding(layoutDirection) + horizontalContentPadding
                 )
             ) {
 
@@ -142,7 +143,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 .align(Alignment.BottomCenter)
                 .imePadding()
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp, start = 8.dp, end = 8.dp)
+                .padding(bottom = 16.dp, start = horizontalContentPadding, end = horizontalContentPadding)
         ) {
             MessageInput(
                 text = uiState.messageText,

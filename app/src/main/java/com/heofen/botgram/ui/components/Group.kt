@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -72,13 +73,19 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.motionEventSpy
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
@@ -108,7 +115,10 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.max
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 
 
@@ -498,19 +508,22 @@ fun MsgBubble(
                         when (msg.type) {
                             MessageType.TEXT -> {
                                 msg.text?.takeIf { it.isNotBlank() }?.let {
-                                    SelectionContainer {
-                                        Text(
-                                            text = it,
+                                    MessageTextWithAdaptiveMeta(
+                                        text = it,
+                                        msg = msg,
+                                        textColor = contentColor,
+                                        metaColor = metaColor,
+                                        textStyle = MaterialTheme.typography.bodyLarge.copy(
                                             fontSize = 16.sp,
-                                            lineHeight = 22.sp,
-                                            color = contentColor,
-                                            modifier = Modifier.padding(
-                                                start = bodyHorizontalPadding,
-                                                end = bodyHorizontalPadding,
-                                                top = bodyTopPadding
-                                            )
+                                            lineHeight = 22.sp
+                                        ),
+                                        fallbackBottomPadding = if (showChrome) 10.dp else 2.dp,
+                                        modifier = Modifier.padding(
+                                            start = bodyHorizontalPadding,
+                                            end = bodyHorizontalPadding,
+                                            top = bodyTopPadding
                                         )
-                                    }
+                                    )
                                 }
                             }
                             MessageType.PHOTO -> MediaMessage(
@@ -565,20 +578,24 @@ fun MsgBubble(
 
                         if (msg.type != MessageType.TEXT && !msg.caption.isNullOrBlank()) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            SelectionContainer {
-                                Text(
-                                    text = msg.caption,
+                            MessageTextWithAdaptiveMeta(
+                                text = msg.caption,
+                                msg = msg,
+                                textColor = if (showChrome) contentColor else MaterialTheme.colorScheme.onSurface,
+                                metaColor = metaColor,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
                                     fontSize = 15.sp,
-                                    lineHeight = 20.sp,
-                                    color = if (showChrome) contentColor else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(
-                                        horizontal = bodyHorizontalPadding
-                                    )
+                                    lineHeight = 20.sp
+                                ),
+                                fallbackBottomPadding = if (showChrome) 10.dp else 2.dp,
+                                modifier = Modifier.padding(
+                                    start = bodyHorizontalPadding,
+                                    end = bodyHorizontalPadding
                                 )
-                            }
+                            )
                         }
 
-                        if (!showMediaMetaOverlay) {
+                        if (!showMediaMetaOverlay && msg.type != MessageType.TEXT && msg.caption.isNullOrBlank()) {
                             MessageMetaRow(
                                 msg = msg,
                                 color = metaColor,
@@ -605,25 +622,182 @@ private fun MessageMetaRow(
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    val formattedDate = remember(msg.timestamp) { formatMessageTime(msg.timestamp) }
-
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (msg.isEdited) {
-            Text(
-                text = "edited",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = color
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-        }
+        MessageMetaContent(msg = msg, color = color)
+    }
+}
 
+@Composable
+private fun MessageTextWithAdaptiveMeta(
+    text: String,
+    msg: Message,
+    textStyle: TextStyle,
+    textColor: Color,
+    metaColor: Color,
+    fallbackBottomPadding: Dp = 0.dp,
+    modifier: Modifier = Modifier
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val metaLabel = remember(msg.isEdited, msg.timestamp) { buildMessageMetaLabel(msg) }
+    val metaTextStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Medium
+    )
+
+    BoxWithConstraints(modifier = modifier) {
+        val availableWidthPx = with(density) { maxWidth.roundToPx() }
+        val textToMetaGapPx = with(density) { 4.dp.roundToPx() }
+        val metaTextLayout = remember(metaLabel, metaTextStyle) {
+            textMeasurer.measure(
+                text = AnnotatedString(metaLabel),
+                style = metaTextStyle
+            )
+        }
+        val inlineMetaContentWidthPx = remember(msg.isOutgoing, metaTextLayout.size.width, density) {
+            metaTextLayout.size.width + if (msg.isOutgoing) {
+                with(density) { 2.dp.roundToPx() + 14.dp.roundToPx() }
+            } else {
+                0
+            }
+        }
+        val separateMetaContentWidthPx = remember(msg.isOutgoing, metaTextLayout.size.width, density) {
+            metaTextLayout.size.width + if (msg.isOutgoing) {
+                with(density) { 4.dp.roundToPx() + 14.dp.roundToPx() }
+            } else {
+                0
+            }
+        }
+        val inlineMetaReserveWidthPx = remember(inlineMetaContentWidthPx, textToMetaGapPx) {
+            inlineMetaContentWidthPx + textToMetaGapPx
+        }
+        val inlineMetaContentHeightPx = remember(metaTextLayout.size.height, density) {
+            max(metaTextLayout.size.height, with(density) { 14.dp.roundToPx() })
+        }
+        val baseLayout = remember(text, textStyle, availableWidthPx) {
+            textMeasurer.measure(
+                text = AnnotatedString(text),
+                style = textStyle,
+                constraints = Constraints(maxWidth = availableWidthPx)
+            )
+        }
+        val baseLastLineWidthPx = remember(baseLayout) {
+            val lastLineIndex = baseLayout.lineCount - 1
+            baseLayout.getLineRight(lastLineIndex) - baseLayout.getLineLeft(lastLineIndex)
+        }
+        val inlineBubbleWidthPx = remember(baseLayout, baseLastLineWidthPx, inlineMetaReserveWidthPx) {
+            max(
+                baseLayout.size.width,
+                ceil(baseLastLineWidthPx + inlineMetaReserveWidthPx).toInt()
+            )
+        }
+        val inlineTextLayout = remember(text, textStyle, inlineBubbleWidthPx) {
+            textMeasurer.measure(
+                text = AnnotatedString(text),
+                style = textStyle,
+                constraints = Constraints(maxWidth = inlineBubbleWidthPx)
+            )
+        }
+        val inlineLastLineWidthPx = remember(inlineTextLayout) {
+            val lastLineIndex = inlineTextLayout.lineCount - 1
+            inlineTextLayout.getLineRight(lastLineIndex) - inlineTextLayout.getLineLeft(lastLineIndex)
+        }
+        val inlineLastLineBottomPx = remember(inlineTextLayout) {
+            val lastLineIndex = inlineTextLayout.lineCount - 1
+            ceil(inlineTextLayout.getLineBottom(lastLineIndex)).toInt()
+        }
+        val canInlineMeta = remember(text, inlineBubbleWidthPx, availableWidthPx, inlineLastLineWidthPx) {
+            if (text.isBlank() || text.endsWith('\n')) {
+                false
+            } else {
+                inlineBubbleWidthPx <= availableWidthPx &&
+                    ceil(inlineLastLineWidthPx + inlineMetaReserveWidthPx).toInt() <= inlineBubbleWidthPx
+            }
+        }
+        val inlineBubbleWidthDp = with(density) { inlineBubbleWidthPx.toDp() }
+        val inlineMetaXOffsetPx = inlineBubbleWidthPx - inlineMetaContentWidthPx
+        val inlineMetaYOffsetPx = max(0, inlineLastLineBottomPx - inlineMetaContentHeightPx)
+        val inlineBottomPadding = if (inlineTextLayout.lineCount > 1) fallbackBottomPadding else 0.dp
+        val fallbackBubbleWidthPx = remember(baseLayout.size.width, separateMetaContentWidthPx) {
+            max(baseLayout.size.width, separateMetaContentWidthPx)
+        }
+        val fallbackBubbleWidthDp = with(density) { fallbackBubbleWidthPx.toDp() }
+
+        if (canInlineMeta) {
+            Box(
+                modifier = Modifier
+                    .width(inlineBubbleWidthDp)
+                    .padding(bottom = inlineBottomPadding)
+            ) {
+                SelectionContainer {
+                    Text(
+                        text = text,
+                        style = textStyle,
+                        color = textColor,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Box(
+                    modifier = Modifier.offset {
+                        IntOffset(
+                            x = inlineMetaXOffsetPx,
+                            y = inlineMetaYOffsetPx
+                        )
+                    }
+                ) {
+                    MessageMetaContent(msg = msg, color = metaColor, inline = true)
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.width(fallbackBubbleWidthDp)
+            ) {
+                SelectionContainer {
+                    Text(
+                        text = text,
+                        style = textStyle,
+                        color = textColor
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    MessageMetaRow(
+                        msg = msg,
+                        color = metaColor,
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
+                }
+                if (fallbackBottomPadding > 0.dp) {
+                    Spacer(modifier = Modifier.height(fallbackBottomPadding))
+                }
+            }
+        }
+    }
+}
+
+private fun buildMessageMetaLabel(msg: Message): String {
+    val formattedDate = formatMessageTime(msg.timestamp)
+    return if (msg.isEdited) "edited $formattedDate" else formattedDate
+}
+
+@Composable
+private fun MessageMetaContent(
+    msg: Message,
+    color: Color,
+    inline: Boolean = false
+) {
+    val metaLabel = remember(msg.isEdited, msg.timestamp) { buildMessageMetaLabel(msg) }
+
+    Row(
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
-            text = formattedDate,
+            text = metaLabel,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.End,
@@ -631,7 +805,7 @@ private fun MessageMetaRow(
         )
 
         if (msg.isOutgoing) {
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(if (inline) 2.dp else 4.dp))
             Icon(
                 imageVector = if (msg.readStatus) Icons.Default.DoneAll else Icons.Default.Done,
                 contentDescription = if (msg.readStatus) "Read" else "Sent",

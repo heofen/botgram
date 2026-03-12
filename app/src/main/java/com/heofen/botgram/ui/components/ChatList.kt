@@ -270,7 +270,7 @@ fun ChatCell(
                     color = MaterialTheme.colorScheme.primaryContainer,
                     shape = RoundedCornerShape(16.dp)
                 )
-                .fillMaxWidth(0.96f)
+                .fillMaxWidth()
                 .clickable { onChatSellClick(chat.id) }
                 .padding(8.dp)
         ) {
