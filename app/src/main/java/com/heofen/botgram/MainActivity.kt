@@ -15,14 +15,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.heofen.botgram.data.MediaManager
-import com.heofen.botgram.data.local.TokenManager
-import com.heofen.botgram.data.remote.TelegramGateway
-import com.heofen.botgram.data.remote.TelegramGatewayFactory
-import com.heofen.botgram.data.repository.ChatRepository
-import com.heofen.botgram.data.repository.MessageRepository
-import com.heofen.botgram.data.repository.UserRepository
-import com.heofen.botgram.database.AppDatabase
+import com.heofen.botgram.di.appContainer
 import com.heofen.botgram.services.GetUpdates
 import com.heofen.botgram.ui.screens.chatlist.ChatListScreen
 import com.heofen.botgram.ui.screens.chatlist.ChatListViewModel
@@ -32,19 +25,15 @@ import com.heofen.botgram.ui.screens.login.LoginScreen
 import com.heofen.botgram.ui.theme.BotgramTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
-
-    private var gateway: TelegramGateway? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val tokenManager = TokenManager(applicationContext)
+        val appContainer = applicationContext.appContainer
+        val tokenManager = appContainer.tokenManager
         val token = tokenManager.getToken()
 
         if (token.isNullOrBlank()) {
@@ -53,27 +42,15 @@ class MainActivity : ComponentActivity() {
                     onCheckToken = { inputToken ->
                         withContext(Dispatchers.IO) {
                             try {
-                                val client = OkHttpClient()
-                                val request = Request.Builder()
-                                    .url("https://api.telegram.org/bot$inputToken/getMe")
-                                    .build()
-
-                                client.newCall(request).execute().use { response ->
-                                    if (!response.isSuccessful) return@withContext false
-
-                                    val responseBody = response.body?.string() ?: return@withContext false
-                                    val json = JSONObject(responseBody)
-                                    val isOk = json.optBoolean("ok", false)
-
-                                    if (isOk) {
-                                        tokenManager.saveToken(inputToken)
-                                        Log.i("Login", "Token is valid. Saved.")
-                                        true
-                                    } else {
-                                        Log.w("Login", "Telegram API returned ok: false")
-                                        false
-                                    }
+                                val isValid = appContainer.tokenValidator.validate(inputToken)
+                                if (isValid) {
+                                    tokenManager.saveToken(inputToken)
+                                    appContainer.clearSession()
+                                    Log.i("Login", "Token is valid. Saved.")
+                                } else {
+                                    Log.w("Login", "Telegram API returned invalid token")
                                 }
+                                isValid
                             } catch (e: Exception) {
                                 Log.e("Login", "Network error: ${e.message}")
                                 false
@@ -92,14 +69,12 @@ class MainActivity : ComponentActivity() {
 
         startUpdateService()
 
-        val database = AppDatabase.getDatabase(applicationContext)
-        gateway = TelegramGatewayFactory.create(applicationContext, token)
-        val activeGateway = requireNotNull(gateway)
-        val mediaManager = MediaManager(activeGateway)
-
-        val chatRepository = ChatRepository(database.chatDao(), mediaManager)
-        val messageRepository = MessageRepository(database.messageDao(), activeGateway, mediaManager)
-        val userRepository = UserRepository(database.userDao(), mediaManager)
+        val session = requireNotNull(appContainer.currentSession()) {
+            "Session dependencies are unavailable without a saved token."
+        }
+        val chatRepository = session.chatRepository
+        val messageRepository = session.messageRepository
+        val userRepository = session.userRepository
 
         setContent {
             BotgramTheme {
@@ -126,6 +101,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onLogOut = {
                                 tokenManager.clearToken()
+                                appContainer.clearSession()
                                 val stopIntent = Intent(applicationContext, GetUpdates::class.java)
                                 stopService(stopIntent)
                                 finish()
@@ -169,11 +145,5 @@ class MainActivity : ComponentActivity() {
     private fun startUpdateService() {
         val intent = Intent(this, GetUpdates::class.java)
         ContextCompat.startForegroundService(this, intent)
-    }
-
-    override fun onDestroy() {
-        gateway?.close()
-        gateway = null
-        super.onDestroy()
     }
 }

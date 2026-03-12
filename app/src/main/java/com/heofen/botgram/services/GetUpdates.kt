@@ -11,15 +11,12 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.heofen.botgram.R
-import com.heofen.botgram.data.MediaManager
-import com.heofen.botgram.data.local.TokenManager
-import com.heofen.botgram.data.remote.TelegramGateway
-import com.heofen.botgram.data.remote.TelegramGatewayFactory
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
-import com.heofen.botgram.database.AppDatabase
+import com.heofen.botgram.di.SessionContainer
+import com.heofen.botgram.di.appContainer
 import com.heofen.botgram.utils.toDbChat
 import com.heofen.botgram.utils.toDbMessage
 import com.heofen.botgram.utils.toDbUser
@@ -39,7 +36,7 @@ class GetUpdates : Service() {
     private lateinit var messageRepo: MessageRepository
     private lateinit var chatRepo: ChatRepository
     private lateinit var userRepo: UserRepository
-    private var gateway: TelegramGateway? = null
+    private var session: SessionContainer? = null
     private var pollingJob: Job? = null
     private var currentToken: String? = null
 
@@ -48,7 +45,8 @@ class GetUpdates : Service() {
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 
-        val tokenManager = TokenManager(applicationContext)
+        val appContainer = applicationContext.appContainer
+        val tokenManager = appContainer.tokenManager
         val token = tokenManager.getToken()
 
         if (token.isNullOrBlank()) {
@@ -61,31 +59,28 @@ class GetUpdates : Service() {
             pollingJob?.cancel()
             pollingJob = null
 
-            gateway?.close()
-            gateway = TelegramGatewayFactory.create(applicationContext, token)
+            session = appContainer.currentSessionForToken(token)
             currentToken = token
         }
 
-        val activeGateway = gateway
-        if (activeGateway == null) {
-            Log.e("GetUpdates", "Gateway is not initialized. Stopping service.")
+        val activeSession = session ?: appContainer.currentSession()
+        if (activeSession == null) {
+            Log.e("GetUpdates", "Session dependencies are not initialized. Stopping service.")
             stopSelf()
             return START_NOT_STICKY
         }
 
-        val mediaManager = MediaManager(activeGateway)
-        val db = AppDatabase.getDatabase(applicationContext)
-
-        messageRepo = MessageRepository(db.messageDao(), activeGateway, mediaManager)
-        chatRepo = ChatRepository(db.chatDao(), mediaManager)
-        userRepo = UserRepository(db.userDao(), mediaManager)
+        session = activeSession
+        messageRepo = activeSession.messageRepository
+        chatRepo = activeSession.chatRepository
+        userRepo = activeSession.userRepository
 
         if (pollingJob?.isActive != true) {
             pollingJob = serviceScope.launch {
                 while (isActive) {
                     try {
                         Log.i("GetUpdates", "Launching Long Polling...")
-                        activeGateway.collectUpdates { message ->
+                        activeSession.gateway.collectUpdates { message ->
                             handleMessage(message)
                         }
                     } catch (e: Exception) {
@@ -149,8 +144,7 @@ class GetUpdates : Service() {
 
         pollingJob?.cancel()
         pollingJob = null
-        gateway?.close()
-        gateway = null
+        session = null
         currentToken = null
         serviceScope.cancel()
     }

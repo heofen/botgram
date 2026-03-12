@@ -59,6 +59,12 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendMessage"))
     }
 
+    suspend fun getMe(): UserDto {
+        val httpUrl = buildMethodUrl(method = "getMe", queryParams = emptyMap())
+        val json = getJson(httpUrl)
+        return parseUser(requireResultObject(parseApiResponse(json), "getMe"))
+    }
+
     suspend fun getFile(fileId: String): TelegramFileDto {
         val httpUrl = buildMethodUrl(
             method = "getFile",

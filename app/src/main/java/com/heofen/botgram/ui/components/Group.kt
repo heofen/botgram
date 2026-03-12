@@ -355,12 +355,12 @@ fun MessageDateDivider(timestamp: Long) {
     ) {
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(50.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
                 .border(
                     width = 1.dp,
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.14f),
-                    shape = RoundedCornerShape(50.dp)
+                    shape = RoundedCornerShape(16.dp)
                 )
                 .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
@@ -459,7 +459,7 @@ fun MsgBubble(
                     Spacer(modifier = Modifier.height(6.dp))
                     Box (
                         modifier = Modifier
-                            .clip(RoundedCornerShape(30))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.20f))
                     ) {
                         Text(
@@ -661,7 +661,7 @@ private fun MediaMetaBadge(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Color(0x99353535))
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.End,
@@ -702,7 +702,7 @@ private fun ReplyPreview(
     Row(
         modifier = modifier
             .widthIn(max = 280.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.34f))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -739,7 +739,7 @@ fun MediaMessage(
     msg: Message,
     icon: ImageVector,
     label: String,
-    shape: RoundedCornerShape = RoundedCornerShape(18.dp),
+    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
     showMetaOverlay: Boolean = false
 ) {
     val context = LocalContext.current
@@ -747,20 +747,14 @@ fun MediaMessage(
     val placeholderColor = MaterialTheme.colorScheme.surfaceVariant
     val placeholderContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     val imageAspectRatio = remember(msg.width, msg.height) {
-        val width = msg.width?.toFloat()
-        val height = msg.height?.toFloat()
-        if (width != null && height != null && height > 0f) {
-            (width / height).coerceIn(0.75f, 1.4f)
-        } else {
-            1f
-        }
+        mediaAspectRatio(msg.width, msg.height)
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(imageAspectRatio)
-            .heightIn(min = 160.dp, max = 340.dp)
+            .heightIn(min = 140.dp, max = 420.dp)
             .clip(shape)
             .background(placeholderColor)
             .clickable(enabled = file != null && file.exists()) {
@@ -772,7 +766,7 @@ fun MediaMessage(
                 model = file,
                 contentDescription = label,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Fit
             )
         } else {
             Column(
@@ -804,7 +798,7 @@ fun MediaMessage(
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(12.dp),
+                .padding(10.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             Text(
@@ -832,7 +826,7 @@ fun VideoNoteMessage(msg: Message) {
 
     Box(
         modifier = Modifier
-            .size(220.dp)
+            .size(216.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = file != null && file.exists()) {
@@ -907,7 +901,7 @@ fun AudioMessage(
     Row(
         modifier = modifier
             .widthIn(max = 280.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
             .clickable(enabled = file != null && file.exists()) {
                 openMessageFile(context, file, "audio/*")
@@ -959,7 +953,7 @@ fun VoiceMessage(
     Row(
         modifier = modifier
             .widthIn(max = 280.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
             .clickable(enabled = file != null && file.exists()) {
                 openMessageFile(context, file, "audio/*")
@@ -1039,7 +1033,7 @@ fun DocumentMessage(
     Row(
         modifier = modifier
             .widthIn(max = 280.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
             .clickable(enabled = file != null && file.exists()) {
                 openMessageFile(context, file, "*/*")
@@ -1050,7 +1044,7 @@ fun DocumentMessage(
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
@@ -1085,7 +1079,7 @@ fun ContactMessage(
     Row(
         modifier = modifier
             .widthIn(max = 280.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1093,7 +1087,7 @@ fun ContactMessage(
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
@@ -1120,7 +1114,7 @@ fun LocationMessage(msg: Message) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
     ) {
         Box(
@@ -1173,7 +1167,7 @@ fun formatDuration(seconds: Long?): String {
 fun VideoMessage(
     msg: Message,
     label: String = "Video",
-    shape: RoundedCornerShape = RoundedCornerShape(18.dp),
+    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
     showMetaOverlay: Boolean = false
 ) {
     val context = LocalContext.current
@@ -1182,11 +1176,15 @@ fun VideoMessage(
     val renderMode = remember(msg.type, file?.path) {
         resolveAnimatedPreviewMode(msg.type, file)
     }
+    val videoAspectRatio = remember(msg.width, msg.height) {
+        mediaAspectRatio(msg.width, msg.height)
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(196.dp)
+            .aspectRatio(videoAspectRatio)
+            .heightIn(min = 140.dp, max = 420.dp)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = file != null && file.exists()) {
@@ -1243,7 +1241,7 @@ fun VideoMessage(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             Text(
                 text = label,
@@ -1289,7 +1287,7 @@ private fun AnimatedGifContent(file: File) {
             model = file,
             contentDescription = "GIF",
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Fit
         )
         return
     }
@@ -1304,7 +1302,7 @@ private fun AnimatedGifContent(file: File) {
         ),
         contentDescription = "GIF",
         modifier = Modifier.fillMaxSize(),
-        contentScale = ContentScale.Crop
+        contentScale = ContentScale.Fit
     )
 }
 
@@ -1354,7 +1352,7 @@ private fun InlineVideoContent(
         factory = { viewContext ->
             PlayerView(viewContext).apply {
                 useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -1407,17 +1405,17 @@ private fun msgBubbleShape(
 
     return if (isOutgoing) {
         when (position) {
-            MsgBubbleClusterPosition.Single -> RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
-            MsgBubbleClusterPosition.Top -> RoundedCornerShape(16.dp, 16.dp, 5.dp, 16.dp)
-            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(16.dp, 5.dp, 5.dp, 16.dp)
-            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(16.dp, 5.dp, 16.dp, 16.dp)
+            MsgBubbleClusterPosition.Single -> RoundedCornerShape(12.dp, 12.dp, 4.dp, 12.dp)
+            MsgBubbleClusterPosition.Top -> RoundedCornerShape(12.dp, 12.dp, 4.dp, 12.dp)
+            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(12.dp, 4.dp, 4.dp, 12.dp)
+            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(12.dp, 4.dp, 12.dp, 12.dp)
         }
     } else {
         when (position) {
-            MsgBubbleClusterPosition.Single -> RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
-            MsgBubbleClusterPosition.Top -> RoundedCornerShape(16.dp, 16.dp, 16.dp, 5.dp)
-            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(5.dp, 16.dp, 16.dp, 5.dp)
-            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(5.dp, 16.dp, 16.dp, 16.dp)
+            MsgBubbleClusterPosition.Single -> RoundedCornerShape(12.dp, 12.dp, 12.dp, 4.dp)
+            MsgBubbleClusterPosition.Top -> RoundedCornerShape(12.dp, 12.dp, 12.dp, 4.dp)
+            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(4.dp, 12.dp, 12.dp, 4.dp)
+            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(4.dp, 12.dp, 12.dp, 12.dp)
         }
     }
 }
@@ -1426,14 +1424,27 @@ private fun mediaContentShape(
     hasContentAbove: Boolean,
     hasContentBelow: Boolean
 ): RoundedCornerShape {
-    val large = 12.dp
-    val inner = 3.dp
+    val large = 10.dp
+    val inner = 2.dp
     return RoundedCornerShape(
         topStart = if (hasContentAbove) inner else large,
         topEnd = if (hasContentAbove) inner else large,
         bottomEnd = if (hasContentBelow) inner else large,
         bottomStart = if (hasContentBelow) inner else large
     )
+}
+
+private fun mediaAspectRatio(
+    width: Int?,
+    height: Int?
+): Float {
+    val mediaWidth = width?.toFloat()
+    val mediaHeight = height?.toFloat()
+    return if (mediaWidth != null && mediaHeight != null && mediaHeight > 0f) {
+        (mediaWidth / mediaHeight).coerceIn(0.56f, 1.9f)
+    } else {
+        1f
+    }
 }
 
 private fun MessageType.isDetachedBubble(): Boolean =
