@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
                             factory = object : ViewModelProvider.Factory {
                                 @Suppress("UNCHECKED_CAST")
                                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                    return ChatListViewModel(chatRepository) as T
+                                    return ChatListViewModel(chatRepository, messageRepository) as T
                                 }
                             }
                         )

@@ -106,11 +106,11 @@ fun ChatListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = innerPadding
                 ) {
-                    items(chats, key = { it.id }) { chat ->
+                    items(chats, key = { it.chat.id }) { chat ->
                         ChatCell(
-                            chat = chat,
+                            item = chat,
                             onChatSellClick = {
-                                onChatClick(chat.id)
+                                onChatClick(chat.chat.id)
                             }
                         )
                         Spacer(

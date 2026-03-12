@@ -1,5 +1,11 @@
 package com.heofen.botgram.ui.components
 
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.os.Build
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,21 +19,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.GifBox
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,23 +42,37 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.database.tables.Chat
+import com.heofen.botgram.database.tables.ChatListItem
+import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.utils.extensions.getInitials
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 import java.io.File
 import java.time.Instant
 import java.time.LocalDateTime
@@ -225,10 +246,13 @@ fun ChatListScreenBar(
 
 @Composable
 fun ChatCell(
-    chat: Chat,
+    item: ChatListItem,
     unreadedCount: Int = 0,
     onChatSellClick: (Long) -> Unit = {}
 ) {
+    val chat = item.chat
+    val lastMessage = item.lastMessage
+
     Box(
         modifier = Modifier
             .fillMaxWidth(),
@@ -290,7 +314,14 @@ fun ChatCell(
                 Row(
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (chat.lastMessageType == MessageType.TEXT) {
+                    if (lastMessage != null && lastMessage.type.isInlinePreviewType()) {
+                        InlineMediaPreview(
+                            message = lastMessage,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .weight(1f)
+                        )
+                    } else if (chat.lastMessageType == MessageType.TEXT) {
                         val preview = chat.lastMessageText
                             ?: "⚠\uFE0F Тут явно что-то пошло не по плану"
 
@@ -336,26 +367,256 @@ fun ChatCell(
 }
 
 @Composable
+private fun InlineMediaPreview(
+    message: Message,
+    modifier: Modifier = Modifier
+) {
+    val file = message.fileLocalPath?.let(::File)
+    val renderMode = remember(message.type, file?.path) {
+        resolveAnimatedPreviewMode(message.type, file)
+    }
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.32f))
+            .padding(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        when (renderMode) {
+            ChatInlinePreviewMode.GIF -> GifPreview(file)
+            ChatInlinePreviewMode.VIDEO -> VideoPreview(file, forceAutoplay = true)
+            ChatInlinePreviewMode.NONE -> Unit
+        }
+
+        val label = if (message.type == MessageType.ANIMATION) "GIF" else "Video"
+        val previewText = message.caption?.takeIf { it.isNotBlank() }
+            ?: message.fileName?.takeIf { it.isNotBlank() }
+            ?: label
+
+        Column(
+            modifier = Modifier
+                .padding(start = 8.dp)
+                .weight(1f)
+        ) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = previewText,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+@Composable
+private fun GifPreview(file: File?) {
+    val context = LocalContext.current
+    val inspectionMode = LocalInspectionMode.current
+    val imageLoader = remember(context) {
+        ImageLoader.Builder(context)
+            .components {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+            }
+            .build()
+    }
+
+    Box(
+        modifier = Modifier
+            .size(width = 88.dp, height = 60.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!inspectionMode && file != null && file.exists()) {
+            Image(
+                painter = rememberAsyncImagePainter(
+                    model = ImageRequest.Builder(context)
+                        .data(file)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader
+                ),
+                contentDescription = "GIF preview",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.GifBox,
+                contentDescription = "GIF preview",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoPreview(
+    file: File?,
+    forceAutoplay: Boolean = false
+) {
+    val inspectionMode = LocalInspectionMode.current
+    val existingFile = file?.takeIf(File::exists)
+    val shouldAutoplay = remember(existingFile?.absolutePath) {
+        existingFile?.let { forceAutoplay || !videoHasAudio(it) } ?: false
+    }
+
+    Box(
+        modifier = Modifier
+            .size(width = 88.dp, height = 60.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!inspectionMode && existingFile != null) {
+            InlineVideoPlayer(
+                file = existingFile,
+                autoplay = shouldAutoplay
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.18f))
+        )
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = "Video preview",
+            tint = Color.White,
+            modifier = Modifier.size(26.dp)
+        )
+    }
+}
+
+@Composable
+private fun InlineVideoPlayer(
+    file: File,
+    autoplay: Boolean
+) {
+    val context = LocalContext.current
+    val fileUri = remember(file.absolutePath) { Uri.fromFile(file) }
+    val exoPlayer = remember(file.absolutePath, autoplay) {
+        ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            volume = 0f
+            playWhenReady = autoplay
+            setMediaItem(MediaItem.fromUri(fileUri))
+            prepare()
+        }
+    }
+
+    LaunchedEffect(exoPlayer, fileUri, autoplay) {
+        exoPlayer.setMediaItem(MediaItem.fromUri(fileUri))
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = autoplay
+        if (autoplay) {
+            exoPlayer.play()
+        }
+    }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (autoplay && playbackState == Player.STATE_READY) {
+                    exoPlayer.playWhenReady = true
+                    exoPlayer.play()
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
+    }
+
+    AndroidView(
+        factory = { viewContext ->
+            PlayerView(viewContext).apply {
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                player = exoPlayer
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+        update = { playerView ->
+            playerView.player = exoPlayer
+        }
+    )
+}
+
+private fun MessageType?.isInlinePreviewType(): Boolean =
+    this == MessageType.VIDEO || this == MessageType.ANIMATION
+
+private enum class ChatInlinePreviewMode {
+    GIF,
+    VIDEO,
+    NONE
+}
+
+private fun resolveAnimatedPreviewMode(
+    type: MessageType,
+    file: File?
+): ChatInlinePreviewMode {
+    val extension = file?.extension?.lowercase()
+    return when {
+        type == MessageType.VIDEO -> ChatInlinePreviewMode.VIDEO
+        type == MessageType.ANIMATION && extension in setOf("gif", "webp") -> ChatInlinePreviewMode.GIF
+        type == MessageType.ANIMATION && file != null -> ChatInlinePreviewMode.VIDEO
+        else -> ChatInlinePreviewMode.NONE
+    }
+}
+
+private fun videoHasAudio(file: File): Boolean {
+    val retriever = MediaMetadataRetriever()
+    return runCatching {
+        retriever.setDataSource(file.absolutePath)
+        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
+    }.getOrDefault(false).also {
+        retriever.release()
+    }
+}
+
+@Composable
 @Preview
 fun ChatCellPreview() {
     BotgramTheme() {
-        val chat = Chat(
-            id = 1,
-            type = ChatType.PRIVATE,
-            title = null,
-            firstName = "Артем",
-            lastName = "Крупный_калибр",
-            username = null,
-
-            lastMessageType = MessageType.TEXT,
-            lastMessageText = "Как дела? Давно не виделись",
-            lastMessageTime = System.currentTimeMillis(),
-            lastMessageSenderId = null,
-
-            avatarFileId = null,
-            avatarFileUniqueId = null,
-            avatarLocalPath = null
+        val item = ChatListItem(
+            chat = Chat(
+                id = 1,
+                type = ChatType.PRIVATE,
+                title = null,
+                firstName = "Артем",
+                lastName = "Крупный_калибр",
+                username = null,
+                lastMessageType = MessageType.TEXT,
+                lastMessageText = "Как дела? Давно не виделись",
+                lastMessageTime = System.currentTimeMillis(),
+                lastMessageSenderId = null,
+                avatarFileId = null,
+                avatarFileUniqueId = null,
+                avatarLocalPath = null
+            ),
+            lastMessage = null
         )
-        ChatCell(chat)
+        ChatCell(item)
     }
 }

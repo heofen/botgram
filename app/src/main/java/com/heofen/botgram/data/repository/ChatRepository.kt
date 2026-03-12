@@ -4,6 +4,7 @@ import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.database.dao.ChatDao
 import com.heofen.botgram.database.tables.Chat
+import com.heofen.botgram.database.tables.ChatListItem
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 
@@ -11,7 +12,7 @@ class ChatRepository(
     private val chatDao: ChatDao,
     private val mediaManager: MediaManager
 ) {
-    fun getAllChats(): Flow<List<Chat>> = chatDao.getAllChats()
+    fun getAllChats(): Flow<List<ChatListItem>> = chatDao.getAllChatListItems()
 
     suspend fun getById(id: Long): Chat? = chatDao.getById(id)
 
@@ -45,5 +46,5 @@ class ChatRepository(
         }
     }
 
-    fun searchChats(query: String): Flow<List<Chat>> = chatDao.searchChats(query)
+    fun searchChats(query: String): Flow<List<ChatListItem>> = chatDao.searchChatListItems(query)
 }

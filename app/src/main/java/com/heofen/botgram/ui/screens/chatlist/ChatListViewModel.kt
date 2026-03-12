@@ -2,8 +2,10 @@ package com.heofen.botgram.ui.screens.chatlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.repository.ChatRepository
-import com.heofen.botgram.database.tables.Chat
+import com.heofen.botgram.data.repository.MessageRepository
+import com.heofen.botgram.database.tables.ChatListItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,9 +18,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class ChatListViewModel(
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val messageRepository: MessageRepository
 ) : ViewModel() {
     private val avatarLoadRequested = mutableSetOf<Long>()
+    private val mediaLoadRequested = mutableSetOf<Pair<Long, Long>>()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -27,7 +31,7 @@ class ChatListViewModel(
     val isSearchActive = _isSearchActive.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val chatListState: StateFlow<List<Chat>> = _searchQuery
+    val chatListState: StateFlow<List<ChatListItem>> = _searchQuery
         .flatMapLatest { query ->
             if (query.isBlank()) {
                 chatRepository.getAllChats()
@@ -45,8 +49,15 @@ class ChatListViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             chatListState.collectLatest { chats ->
                 chats.take(20).forEach { chat ->
-                    if (avatarLoadRequested.add(chat.id)) {
-                        chatRepository.loadAvatarIfMissing(chat.id)
+                    if (avatarLoadRequested.add(chat.chat.id)) {
+                        chatRepository.loadAvatarIfMissing(chat.chat.id)
+                    }
+
+                    val lastMessage = chat.lastMessage ?: return@forEach
+                    if (!lastMessage.type.isInlinePreviewType()) return@forEach
+
+                    if (mediaLoadRequested.add(lastMessage.chatId to lastMessage.messageId)) {
+                        messageRepository.ensureMediaDownloaded(lastMessage)
                     }
                 }
             }
@@ -63,4 +74,7 @@ class ChatListViewModel(
             _searchQuery.value = ""
         }
     }
+
+    private fun MessageType.isInlinePreviewType(): Boolean =
+        this == MessageType.VIDEO || this == MessageType.ANIMATION
 }

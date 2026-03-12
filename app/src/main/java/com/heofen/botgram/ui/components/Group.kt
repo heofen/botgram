@@ -1,7 +1,13 @@
 package com.heofen.botgram.ui.components
 
 import android.content.Intent
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.os.Build
 import android.util.Log
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,6 +59,8 @@ import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,8 +78,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.database.tables.Chat
@@ -92,6 +111,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 
 
 @Composable
@@ -366,6 +386,12 @@ fun MsgBubble(
 ) {
     val showChrome = !msg.type.isDetachedBubble()
     val isMediaBubble = msg.type.isRichMediaBubble()
+    val isVisualMediaBubble = msg.type.isVisualMediaBubble()
+    val hasBodyText = when (msg.type) {
+        MessageType.TEXT -> !msg.text.isNullOrBlank()
+        else -> !msg.caption.isNullOrBlank()
+    }
+    val showMediaMetaOverlay = isVisualMediaBubble && !hasBodyText
     val bodyHorizontalPadding = if (showChrome) 12.dp else 4.dp
     val bodyTopPadding = if (showChrome && msg.replyMsgId == null && !isMediaBubble) 10.dp else 0.dp
     val containerColor = if (msg.isOutgoing) {
@@ -390,12 +416,18 @@ fun MsgBubble(
             showChrome = showChrome
         )
     }
+    val mediaShape = remember(msg.replyMsgId, hasBodyText, showMediaMetaOverlay) {
+        mediaContentShape(
+            hasContentAbove = msg.replyMsgId != null,
+            hasContentBelow = hasBodyText || !showMediaMetaOverlay
+        )
+    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val maxBubbleWidth = when {
             msg.type == MessageType.VIDEO_NOTE || msg.type.isStickerType() -> 220.dp
-            isMediaBubble -> maxWidth * 0.78f
-            else -> maxWidth * 0.82f
+            isMediaBubble -> maxWidth * 0.72f
+            else -> maxWidth * 0.76f
         }
 
         Row(
@@ -496,12 +528,16 @@ fun MsgBubble(
                             MessageType.PHOTO -> MediaMessage(
                                 msg = msg,
                                 icon = Icons.Default.Image,
-                                label = "Photo"
+                                label = "Photo",
+                                shape = mediaShape,
+                                showMetaOverlay = showMediaMetaOverlay
                             )
                             MessageType.VIDEO,
                             MessageType.ANIMATION -> VideoMessage(
                                 msg = msg,
-                                label = if (msg.type == MessageType.ANIMATION) "GIF" else "Video"
+                                label = if (msg.type == MessageType.ANIMATION) "GIF" else "Video",
+                                shape = mediaShape,
+                                showMetaOverlay = showMediaMetaOverlay
                             )
                             MessageType.VIDEO_NOTE -> VideoNoteMessage(msg)
                             MessageType.AUDIO -> AudioMessage(
@@ -554,18 +590,20 @@ fun MsgBubble(
                             }
                         }
 
-                        MessageMetaRow(
-                            msg = msg,
-                            color = metaColor,
-                            modifier = Modifier
-                                .align(Alignment.End)
-                                .padding(
-                                    start = if (showChrome) 12.dp else 4.dp,
-                                    end = if (showChrome) 12.dp else 4.dp,
-                                    top = 6.dp,
-                                    bottom = if (showChrome) 10.dp else 2.dp
-                                )
-                        )
+                        if (!showMediaMetaOverlay) {
+                            MessageMetaRow(
+                                msg = msg,
+                                color = metaColor,
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(
+                                        start = if (showChrome) 12.dp else 4.dp,
+                                        end = if (showChrome) 12.dp else 4.dp,
+                                        top = 6.dp,
+                                        bottom = if (showChrome) 10.dp else 2.dp
+                                    )
+                            )
+                        }
                     }
                 }
             }
@@ -579,11 +617,7 @@ private fun MessageMetaRow(
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    val formattedDate = remember(msg.timestamp) {
-        val instant = Instant.ofEpochMilli(msg.timestamp)
-        val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-        dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-    }
+    val formattedDate = remember(msg.timestamp) { formatMessageTime(msg.timestamp) }
 
     Row(
         modifier = modifier,
@@ -614,6 +648,38 @@ private fun MessageMetaRow(
                 imageVector = if (msg.readStatus) Icons.Default.DoneAll else Icons.Default.Done,
                 contentDescription = if (msg.readStatus) "Read" else "Sent",
                 tint = color,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MediaMetaBadge(
+    msg: Message,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0x99353535))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = formatMessageTime(msg.timestamp),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White
+        )
+
+        if (msg.isOutgoing) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = if (msg.readStatus) Icons.Default.DoneAll else Icons.Default.Done,
+                contentDescription = if (msg.readStatus) "Read" else "Sent",
+                tint = Color.White,
                 modifier = Modifier.size(14.dp)
             )
         }
@@ -672,7 +738,9 @@ private fun ReplyPreview(
 fun MediaMessage(
     msg: Message,
     icon: ImageVector,
-    label: String
+    label: String,
+    shape: RoundedCornerShape = RoundedCornerShape(18.dp),
+    showMetaOverlay: Boolean = false
 ) {
     val context = LocalContext.current
     val file = msg.fileLocalPath?.let { File(it) }
@@ -693,7 +761,7 @@ fun MediaMessage(
             .fillMaxWidth()
             .aspectRatio(imageAspectRatio)
             .heightIn(min = 160.dp, max = 340.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(shape)
             .background(placeholderColor)
             .clickable(enabled = file != null && file.exists()) {
                 openMessageFile(context, file, "image/*")
@@ -720,13 +788,6 @@ fun MediaMessage(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = label, color = placeholderContentColor)
-                msg.fileSize?.takeIf { it > 0 }?.let {
-                    Text(
-                        text = formatFileSize(it),
-                        fontSize = 12.sp,
-                        color = placeholderContentColor.copy(alpha = 0.7f)
-                    )
-                }
             }
         }
 
@@ -743,9 +804,7 @@ fun MediaMessage(
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .fillMaxWidth()
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom
         ) {
             Text(
@@ -753,13 +812,15 @@ fun MediaMessage(
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White
             )
-            msg.fileSize?.takeIf { it > 0 }?.let {
-                Text(
-                    text = formatFileSize(it),
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.82f)
-                )
-            }
+        }
+
+        if (showMetaOverlay) {
+            MediaMetaBadge(
+                msg = msg,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(10.dp)
+            )
         }
     }
 }
@@ -1111,42 +1172,78 @@ fun formatDuration(seconds: Long?): String {
 @Composable
 fun VideoMessage(
     msg: Message,
-    label: String = "Video"
+    label: String = "Video",
+    shape: RoundedCornerShape = RoundedCornerShape(18.dp),
+    showMetaOverlay: Boolean = false
 ) {
     val context = LocalContext.current
     val file = msg.fileLocalPath?.let { File(it) }
     val duration = formatDuration(msg.duration).takeIf { it.isNotBlank() }
-    val size = formatFileSize(msg.fileSize).takeIf { it.isNotBlank() }
+    val renderMode = remember(msg.type, file?.path) {
+        resolveAnimatedPreviewMode(msg.type, file)
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(208.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .height(196.dp)
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = file != null && file.exists()) {
                 openMessageFile(context, file, "video/*")
             }
-            .padding(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.32f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayCircle,
-                contentDescription = label,
-                tint = Color.White,
-                modifier = Modifier.size(40.dp)
-            )
+        when {
+            file != null && file.exists() && renderMode == InlinePreviewMode.GIF -> {
+                AnimatedGifContent(file = file)
+            }
+
+            file != null && file.exists() && renderMode == InlinePreviewMode.VIDEO -> {
+                InlineVideoContent(
+                    file = file,
+                    autoplay = msg.type == MessageType.ANIMATION || !videoHasAudio(file)
+                )
+            }
+
+            else -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.32f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayCircle,
+                            contentDescription = label,
+                            tint = Color.White,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+            }
         }
 
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.48f))
+                    )
+                )
+        )
+
         Column(
-            modifier = Modifier.align(Alignment.BottomStart)
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(16.dp)
         ) {
             Text(
                 text = label,
@@ -1154,11 +1251,150 @@ fun VideoMessage(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = listOfNotNull(duration, size).joinToString(" • ").ifBlank { "Tap to open" },
+                text = duration ?: "Tap to open",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        if (showMetaOverlay) {
+            MediaMetaBadge(
+                msg = msg,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(10.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnimatedGifContent(file: File) {
+    val context = LocalContext.current
+    val inspectionMode = LocalInspectionMode.current
+    val imageLoader = remember(context) {
+        ImageLoader.Builder(context)
+            .components {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+            }
+            .build()
+    }
+
+    if (inspectionMode) {
+        AsyncImage(
+            model = file,
+            contentDescription = "GIF",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        return
+    }
+
+    Image(
+        painter = rememberAsyncImagePainter(
+            model = ImageRequest.Builder(context)
+                .data(file)
+                .crossfade(true)
+                .build(),
+            imageLoader = imageLoader
+        ),
+        contentDescription = "GIF",
+        modifier = Modifier.fillMaxSize(),
+        contentScale = ContentScale.Crop
+    )
+}
+
+@Composable
+private fun InlineVideoContent(
+    file: File,
+    autoplay: Boolean
+) {
+    val context = LocalContext.current
+    val fileUri = remember(file.absolutePath) { Uri.fromFile(file) }
+    val exoPlayer = remember(file.absolutePath, autoplay) {
+        ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            volume = 0f
+            playWhenReady = autoplay
+            setMediaItem(MediaItem.fromUri(fileUri))
+            prepare()
+        }
+    }
+
+    LaunchedEffect(exoPlayer, fileUri, autoplay) {
+        exoPlayer.setMediaItem(MediaItem.fromUri(fileUri))
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = autoplay
+        if (autoplay) {
+            exoPlayer.play()
+        }
+    }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (autoplay && playbackState == Player.STATE_READY) {
+                    exoPlayer.playWhenReady = true
+                    exoPlayer.play()
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
+    }
+
+    AndroidView(
+        factory = { viewContext ->
+            PlayerView(viewContext).apply {
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                player = exoPlayer
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+        update = { playerView ->
+            playerView.player = exoPlayer
+        }
+    )
+}
+
+private fun videoHasAudio(file: File): Boolean {
+    val retriever = MediaMetadataRetriever()
+    return runCatching {
+        retriever.setDataSource(file.absolutePath)
+        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
+    }.getOrDefault(false).also {
+        retriever.release()
+    }
+}
+
+private enum class InlinePreviewMode {
+    GIF,
+    VIDEO,
+    NONE
+}
+
+private fun resolveAnimatedPreviewMode(
+    type: MessageType,
+    file: File?
+): InlinePreviewMode {
+    val extension = file?.extension?.lowercase()
+    return when {
+        type == MessageType.VIDEO -> InlinePreviewMode.VIDEO
+        type == MessageType.ANIMATION && extension in setOf("gif", "webp") -> InlinePreviewMode.GIF
+        type == MessageType.ANIMATION && file != null -> InlinePreviewMode.VIDEO
+        else -> InlinePreviewMode.NONE
     }
 }
 
@@ -1171,19 +1407,33 @@ private fun msgBubbleShape(
 
     return if (isOutgoing) {
         when (position) {
-            MsgBubbleClusterPosition.Single -> RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)
-            MsgBubbleClusterPosition.Top -> RoundedCornerShape(20.dp, 20.dp, 8.dp, 20.dp)
-            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(20.dp, 8.dp, 8.dp, 20.dp)
-            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(20.dp, 8.dp, 20.dp, 20.dp)
+            MsgBubbleClusterPosition.Single -> RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
+            MsgBubbleClusterPosition.Top -> RoundedCornerShape(16.dp, 16.dp, 5.dp, 16.dp)
+            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(16.dp, 5.dp, 5.dp, 16.dp)
+            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(16.dp, 5.dp, 16.dp, 16.dp)
         }
     } else {
         when (position) {
-            MsgBubbleClusterPosition.Single -> RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
-            MsgBubbleClusterPosition.Top -> RoundedCornerShape(20.dp, 20.dp, 20.dp, 8.dp)
-            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(8.dp, 20.dp, 20.dp, 8.dp)
-            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(8.dp, 20.dp, 20.dp, 20.dp)
+            MsgBubbleClusterPosition.Single -> RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
+            MsgBubbleClusterPosition.Top -> RoundedCornerShape(16.dp, 16.dp, 16.dp, 5.dp)
+            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(5.dp, 16.dp, 16.dp, 5.dp)
+            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(5.dp, 16.dp, 16.dp, 16.dp)
         }
     }
+}
+
+private fun mediaContentShape(
+    hasContentAbove: Boolean,
+    hasContentBelow: Boolean
+): RoundedCornerShape {
+    val large = 12.dp
+    val inner = 3.dp
+    return RoundedCornerShape(
+        topStart = if (hasContentAbove) inner else large,
+        topEnd = if (hasContentAbove) inner else large,
+        bottomEnd = if (hasContentBelow) inner else large,
+        bottomStart = if (hasContentBelow) inner else large
+    )
 }
 
 private fun MessageType.isDetachedBubble(): Boolean =
@@ -1202,6 +1452,17 @@ private fun MessageType.isRichMediaBubble(): Boolean =
         this == MessageType.VIDEO ||
         this == MessageType.ANIMATION ||
         this == MessageType.LOCATION
+
+private fun MessageType.isVisualMediaBubble(): Boolean =
+    this == MessageType.PHOTO ||
+        this == MessageType.VIDEO ||
+        this == MessageType.ANIMATION
+
+private fun formatMessageTime(timestamp: Long): String {
+    val instant = Instant.ofEpochMilli(timestamp)
+    val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+    return dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+}
 
 private fun User?.displayName(defaultName: String = "Unknown"): String =
     listOfNotNull(this?.firstName, this?.lastName)
