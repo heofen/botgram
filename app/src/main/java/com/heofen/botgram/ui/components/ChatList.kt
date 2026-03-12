@@ -3,10 +3,12 @@ package com.heofen.botgram.ui.components
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,8 +56,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
@@ -68,10 +68,9 @@ import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.ChatListItem
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.ui.theme.BotgramTheme
+import com.heofen.botgram.ui.theme.botgramHazeStyle
 import com.heofen.botgram.utils.extensions.getInitials
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import java.io.File
 import java.time.Instant
@@ -120,12 +119,7 @@ fun ChatListScreenBar(
     onSearchToggle: (Boolean) -> Unit = {},
     onMenuClick: () -> Unit = {},
 ) {
-    val islandStyle = HazeStyle(
-        blurRadius = 20.dp,
-        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-        tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)),
-        noiseFactor = 0.1f
-    )
+    val islandStyle = botgramHazeStyle()
 
     Box(
         modifier = Modifier
@@ -147,7 +141,12 @@ fun ChatListScreenBar(
                     .hazeEffect(state = hazeState, style = islandStyle)
                     .clickable {
                         if (isSearchActive) onSearchToggle(false) else onMenuClick()
-                    },
+                    }
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(50.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -160,19 +159,24 @@ fun ChatListScreenBar(
 
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(1f, fill = false)
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .then(if (isSearchActive) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-                        .height(40.dp)
                         .clip(RoundedCornerShape(50))
                         .hazeEffect(state = hazeState, style = islandStyle)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(50.dp)
+                        )
                         .clickable(enabled = !isSearchActive) {
-                        },
-                    contentAlignment = Alignment.Center
+                        }
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    contentAlignment = if (isSearchActive) Alignment.CenterStart else Alignment.Center
                 ) {
                     if (isSearchActive) {
                         BasicTextField(
@@ -187,10 +191,8 @@ fun ChatListScreenBar(
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
                             decorationBox = { innerTextField ->
                                 Box(
-                                    contentAlignment = Alignment.CenterStart,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
                                 ) {
                                     if (searchQuery.isEmpty()) {
                                         Text(
@@ -212,8 +214,7 @@ fun ChatListScreenBar(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 20.dp)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -230,7 +231,12 @@ fun ChatListScreenBar(
                         } else {
                             onSearchToggle(true)
                         }
-                    },
+                    }
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(50.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -444,6 +450,7 @@ private fun GifPreview(file: File?) {
                 painter = rememberAsyncImagePainter(
                     model = ImageRequest.Builder(context)
                         .data(file)
+                        .allowHardware(false)
                         .crossfade(true)
                         .build(),
                     imageLoader = imageLoader
@@ -546,21 +553,24 @@ private fun InlineVideoPlayer(
 
     AndroidView(
         factory = { viewContext ->
-            PlayerView(viewContext).apply {
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            TextureView(viewContext).apply {
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
-                player = exoPlayer
             }
         },
         modifier = Modifier.fillMaxSize(),
-        update = { playerView ->
-            playerView.player = exoPlayer
+        update = { textureView ->
+            exoPlayer.setVideoTextureView(textureView)
         }
     )
+
+    DisposableEffect(exoPlayer) {
+        onDispose {
+            exoPlayer.clearVideoSurface()
+        }
+    }
 }
 
 private fun MessageType?.isInlinePreviewType(): Boolean =

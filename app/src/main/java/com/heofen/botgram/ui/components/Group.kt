@@ -5,6 +5,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.Image
@@ -83,8 +84,6 @@ import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
@@ -97,11 +96,10 @@ import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
 import com.heofen.botgram.ui.theme.BotgramTheme
+import com.heofen.botgram.ui.theme.botgramHazeStyle
 import com.heofen.botgram.utils.extensions.getInitials
 import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import java.io.File
 import java.time.Instant
@@ -153,12 +151,7 @@ fun MessageInput(
     onTextChange: (String) -> Unit,
     onSendClick: () -> Unit
 ) {
-    val islandStyle = HazeStyle(
-        blurRadius = 20.dp,
-        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-        tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)),
-        noiseFactor = 0.05f
-    )
+    val islandStyle = botgramHazeStyle()
 
     Box(
         modifier = Modifier
@@ -233,12 +226,7 @@ fun GroupScreenBar(
     hazeState: HazeState,
     onBackClick: () -> Unit = {}
 ) {
-    val islandStyle = HazeStyle(
-        blurRadius = 20.dp,
-        backgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-        tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)),
-        noiseFactor = 0.05f
-    )
+    val islandStyle = botgramHazeStyle()
 
     Box(
         modifier = Modifier
@@ -1296,6 +1284,7 @@ private fun AnimatedGifContent(file: File) {
         painter = rememberAsyncImagePainter(
             model = ImageRequest.Builder(context)
                 .data(file)
+                .allowHardware(false)
                 .crossfade(true)
                 .build(),
             imageLoader = imageLoader
@@ -1350,21 +1339,24 @@ private fun InlineVideoContent(
 
     AndroidView(
         factory = { viewContext ->
-            PlayerView(viewContext).apply {
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            TextureView(viewContext).apply {
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
-                player = exoPlayer
             }
         },
         modifier = Modifier.fillMaxSize(),
-        update = { playerView ->
-            playerView.player = exoPlayer
+        update = { textureView ->
+            exoPlayer.setVideoTextureView(textureView)
         }
     )
+
+    DisposableEffect(exoPlayer) {
+        onDispose {
+            exoPlayer.clearVideoSurface()
+        }
+    }
 }
 
 private fun videoHasAudio(file: File): Boolean {
