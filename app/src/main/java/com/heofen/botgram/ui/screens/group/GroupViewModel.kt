@@ -10,6 +10,7 @@ import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,12 +35,13 @@ class GroupViewModel(
 ) : ViewModel() {
     private val mediaLoadRequested = mutableSetOf<Pair<Long, Long>>()
     private val userAvatarLoadRequested = mutableSetOf<Long>()
+    private var chatAvatarLoadRequested = false
 
     private val _uiState = MutableStateFlow(GroupUiState())
     val uiState: StateFlow<GroupUiState> = _uiState.asStateFlow()
 
     init {
-        loadGroupData()
+        observeGroupData()
     }
 
     fun onMessageChange(text: String) {
@@ -71,48 +73,54 @@ class GroupViewModel(
         }
     }
 
-    private fun loadGroupData() {
+    private fun observeGroupData() {
         viewModelScope.launch {
-            val chat = chatRepository.getById(chatId)
-            _uiState.update { it.copy(chat = chat) }
+            launch {
+                chatRepository.observeById(chatId).collect { chat ->
+                    _uiState.update { it.copy(chat = chat) }
 
-            if (chat != null) {
-                launch(Dispatchers.IO) {
-                    chatRepository.loadAvatarIfMissing(chatId)
+                    if (chat != null && !chatAvatarLoadRequested) {
+                        chatAvatarLoadRequested = true
+                        launch(Dispatchers.IO) {
+                            chatRepository.loadAvatarIfMissing(chatId)
+                        }
+                    }
                 }
             }
 
-            messageRepository.getChatMessages(chatId).collectLatest { messages ->
-                val orderedMessages = messages.asReversed()
-                val userIds = messages.mapNotNull { it.senderId }.distinct()
-                val users = withContext(Dispatchers.IO) {
-                    val loaded = mutableMapOf<Long, User>()
-                    userIds.forEach { userId ->
-                        userRepository.getById(userId)?.let { user ->
-                            loaded[userId] = user
+            launch {
+                messageRepository.getChatMessages(chatId).collectLatest { messages ->
+                    val orderedMessages = messages.asReversed()
+                    val userIds = messages.mapNotNull { it.senderId }.distinct()
+                    val users = withContext(Dispatchers.IO) {
+                        val loaded = mutableMapOf<Long, User>()
+                        userIds.forEach { userId ->
+                            userRepository.getById(userId)?.let { user ->
+                                loaded[userId] = user
+                            }
                         }
+                        loaded
                     }
-                    loaded
-                }
 
-                _uiState.update {
-                    it.copy(
-                        messages = orderedMessages,
-                        users = users,
-                        isLoading = false
-                    )
-                }
+                    _uiState.update {
+                        it.copy(
+                            messages = orderedMessages,
+                            users = users,
+                            isLoading = false
+                        )
+                    }
 
-                withContext(Dispatchers.IO) {
-                    messages.forEach { message ->
-                        val key = message.chatId to message.messageId
-                        if (mediaLoadRequested.add(key)) {
-                            messageRepository.ensureMediaDownloaded(message)
+                    withContext(Dispatchers.IO) {
+                        messages.forEach { message ->
+                            val key = message.chatId to message.messageId
+                            if (mediaLoadRequested.add(key)) {
+                                messageRepository.ensureMediaDownloaded(message)
+                            }
                         }
-                    }
-                    userIds.forEach { userId ->
-                        if (userAvatarLoadRequested.add(userId)) {
-                            userRepository.loadAvatarIfMissing(userId)
+                        userIds.forEach { userId ->
+                            if (userAvatarLoadRequested.add(userId)) {
+                                userRepository.loadAvatarIfMissing(userId)
+                            }
                         }
                     }
                 }

@@ -56,6 +56,9 @@ interface ChatDao {
     fun getAllChatListItems(): Flow<List<ChatListItem>>
 
     @Query("SELECT * FROM chats WHERE id = :id")
+    fun observeById(id: Long): Flow<Chat?>
+
+    @Query("SELECT * FROM chats WHERE id = :id")
     suspend fun getById(id: Long): Chat?
 
     @Query("SELECT EXISTS(SELECT * FROM chats WHERE id = :chatId)")

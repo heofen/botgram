@@ -12,11 +12,12 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.heofen.botgram.R
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
+import com.heofen.botgram.data.local.TokenManager
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.di.SessionContainer
-import com.heofen.botgram.di.appContainer
+import com.heofen.botgram.di.SessionManager
 import com.heofen.botgram.utils.toDbChat
 import com.heofen.botgram.utils.toDbMessage
 import com.heofen.botgram.utils.toDbUser
@@ -28,8 +29,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
 
 class GetUpdates : Service() {
+    private val tokenManager: TokenManager by inject()
+    private val sessionManager: SessionManager by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -45,8 +49,6 @@ class GetUpdates : Service() {
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 
-        val appContainer = applicationContext.appContainer
-        val tokenManager = appContainer.tokenManager
         val token = tokenManager.getToken()
 
         if (token.isNullOrBlank()) {
@@ -59,11 +61,11 @@ class GetUpdates : Service() {
             pollingJob?.cancel()
             pollingJob = null
 
-            session = appContainer.currentSessionForToken(token)
+            session = sessionManager.currentSessionForToken(token)
             currentToken = token
         }
 
-        val activeSession = session ?: appContainer.currentSession()
+        val activeSession = session ?: sessionManager.currentSession()
         if (activeSession == null) {
             Log.e("GetUpdates", "Session dependencies are not initialized. Stopping service.")
             stopSelf()
@@ -132,7 +134,7 @@ class GetUpdates : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Get Updates Service")
             .setContentText("Running...")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.app_ic_foreground)
             .setOngoing(true)
             .setShowWhen(false)
             .setSound(null)

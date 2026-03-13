@@ -15,7 +15,7 @@ class UserRepository(
 
     suspend fun insertUser(user: User) = userDao.insert(user)
 
-    suspend fun upsertUser(user: User) = userDao.upsert(user)
+    suspend fun upsertUser(user: User) = userDao.upsert(user.mergeStoredAvatar())
 
     suspend fun updateAvatar(
         userId: Long,
@@ -40,5 +40,14 @@ class UserRepository(
         if (avatar.localPath != null) {
             userDao.updateAvatar(userId, avatar.fileId, avatar.fileUniqueId, avatar.localPath)
         }
+    }
+
+    private suspend fun User.mergeStoredAvatar(): User {
+        val current = userDao.getById(id) ?: return this
+        return copy(
+            avatarFileId = avatarFileId ?: current.avatarFileId,
+            avatarFileUniqueId = avatarFileUniqueId ?: current.avatarFileUniqueId,
+            avatarLocalPath = avatarLocalPath ?: current.avatarLocalPath
+        )
     }
 }

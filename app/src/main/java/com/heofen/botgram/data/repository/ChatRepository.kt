@@ -14,13 +14,15 @@ class ChatRepository(
 ) {
     fun getAllChats(): Flow<List<ChatListItem>> = chatDao.getAllChatListItems()
 
+    fun observeById(id: Long): Flow<Chat?> = chatDao.observeById(id)
+
     suspend fun getById(id: Long): Chat? = chatDao.getById(id)
 
     suspend fun chatExists(id: Long): Boolean = chatDao.chatExists(id)
 
     suspend fun insertChat(chat: Chat) = chatDao.insert(chat)
 
-    suspend fun upsertChat(chat: Chat) = chatDao.upsert(chat)
+    suspend fun upsertChat(chat: Chat) = chatDao.upsert(chat.mergeStoredAvatar())
 
     suspend fun updateLastMessage(chatId: Long, type: MessageType, text: String?, time: Long, senderId: Long?) =
         chatDao.updateLastMessage(chatId, type, text, time, senderId)
@@ -47,4 +49,13 @@ class ChatRepository(
     }
 
     fun searchChats(query: String): Flow<List<ChatListItem>> = chatDao.searchChatListItems(query)
+
+    private suspend fun Chat.mergeStoredAvatar(): Chat {
+        val current = chatDao.getById(id) ?: return this
+        return copy(
+            avatarFileId = avatarFileId ?: current.avatarFileId,
+            avatarFileUniqueId = avatarFileUniqueId ?: current.avatarFileUniqueId,
+            avatarLocalPath = avatarLocalPath ?: current.avatarLocalPath
+        )
+    }
 }
