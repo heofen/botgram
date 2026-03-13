@@ -8,6 +8,7 @@ import com.heofen.botgram.data.remote.AvatarDownloadResult
 import com.heofen.botgram.data.remote.TelegramChat
 import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
+import com.heofen.botgram.data.remote.TelegramUpdate
 import com.heofen.botgram.data.remote.TelegramUser
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -22,20 +23,39 @@ class HttpTelegramGateway(
     private val apiClient = TelegramBotApiClient(token = token)
     private var nextUpdateOffset: Long? = null
 
-    override suspend fun collectUpdates(onMessage: suspend (TelegramIncomingMessage) -> Unit) {
+    override suspend fun collectUpdates(onUpdate: suspend (TelegramUpdate) -> Unit) {
         while (currentCoroutineContext().isActive) {
             val updates = apiClient.getUpdates(offset = nextUpdateOffset, timeout = 50)
 
             for (update in updates) {
-                val message = update.message ?: update.editedMessage ?: continue
-                onMessage(message.toIncomingMessage())
+                val telegramUpdate = when {
+                    update.message != null -> TelegramUpdate.NewMessage(
+                        updateId = update.updateId,
+                        message = update.message.toIncomingMessage()
+                    )
+                    update.editedMessage != null -> TelegramUpdate.EditedMessage(
+                        updateId = update.updateId,
+                        message = update.editedMessage.toIncomingMessage()
+                    )
+                    else -> TelegramUpdate.Unsupported(updateId = update.updateId)
+                }
+
+                onUpdate(telegramUpdate)
                 nextUpdateOffset = update.updateId + 1
             }
         }
     }
 
-    override suspend fun sendTextMessage(chatId: Long, text: String): TelegramIncomingMessage {
-        return apiClient.sendMessage(chatId = chatId, text = text)
+    override suspend fun sendTextMessage(
+        chatId: Long,
+        text: String,
+        replyToMessageId: Long?
+    ): TelegramIncomingMessage {
+        return apiClient.sendMessage(
+            chatId = chatId,
+            text = text,
+            replyToMessageId = replyToMessageId
+        )
             .toIncomingMessage()
     }
 

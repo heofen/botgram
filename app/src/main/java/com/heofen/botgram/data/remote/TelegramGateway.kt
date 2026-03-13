@@ -7,9 +7,13 @@ data class AvatarDownloadResult(
 )
 
 interface TelegramGateway {
-    suspend fun collectUpdates(onMessage: suspend (TelegramIncomingMessage) -> Unit)
+    suspend fun collectUpdates(onUpdate: suspend (TelegramUpdate) -> Unit)
 
-    suspend fun sendTextMessage(chatId: Long, text: String): TelegramIncomingMessage
+    suspend fun sendTextMessage(
+        chatId: Long,
+        text: String,
+        replyToMessageId: Long? = null
+    ): TelegramIncomingMessage
 
     suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean
 

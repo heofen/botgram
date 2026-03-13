@@ -2,7 +2,9 @@ package com.heofen.botgram.data.repository
 
 import android.util.Log
 import com.heofen.botgram.data.MediaManager
+import com.heofen.botgram.data.remote.TelegramIncomingMessage
 import com.heofen.botgram.data.remote.TelegramGateway
+import com.heofen.botgram.data.sync.MessageSyncStore
 import com.heofen.botgram.database.dao.MessageDao
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.utils.toDbMessage
@@ -15,7 +17,7 @@ class MessageRepository(
     private val messageDao: MessageDao,
     private val gateway: TelegramGateway,
     private val mediaManager: MediaManager
-) {
+) : MessageSyncStore {
 
     private val downloadSemaphore = Semaphore(permits = 3)
 
@@ -49,8 +51,26 @@ class MessageRepository(
     suspend fun findCachedMedia(fileUniqueId: String): Message? =
         messageDao.findDownloadedByUniqueId(fileUniqueId)
 
-    suspend fun getLastMessage(chatId: Long): Message? =
+    override suspend fun getLastMessage(chatId: Long): Message? =
         messageDao.getLastMessage(chatId)
+
+    override suspend fun upsertRemoteMessage(
+        message: TelegramIncomingMessage,
+        isOutgoing: Boolean,
+        readStatus: Boolean
+    ): Message {
+        val existing = getMessage(message.chatId, message.messageId)
+        val incoming = message.toDbMessage(
+            isOutgoing = existing?.isOutgoing ?: isOutgoing,
+            readStatus = existing?.readStatus ?: readStatus
+        )
+        val merged = mergeRemoteMessageWithLocalState(
+            incoming = incoming,
+            existing = existing
+        )
+        messageDao.insert(merged)
+        return merged
+    }
 
     suspend fun deleteOldMessages(chatId: Long, beforeTimestamp: Long) =
         messageDao.deleteOldMessages(chatId, beforeTimestamp)
@@ -74,9 +94,17 @@ class MessageRepository(
     suspend fun fileExists(fileUniqueId: String): Boolean =
         messageDao.fileExists(fileUniqueId)
 
-    suspend fun sendTextMessage(chatId: Long, text: String): Message? {
+    suspend fun sendTextMessage(
+        chatId: Long,
+        text: String,
+        replyToMessageId: Long? = null
+    ): Message? {
         return try {
-            val sentMessage = gateway.sendTextMessage(chatId, text)
+            val sentMessage = gateway.sendTextMessage(
+                chatId = chatId,
+                text = text,
+                replyToMessageId = replyToMessageId
+            )
             val dbMessage = sentMessage.toDbMessage(isOutgoing = true, readStatus = true)
             messageDao.insert(dbMessage)
             Log.i("MessageRepository", "Message sent: ${sentMessage.messageId}")
@@ -120,4 +148,35 @@ class MessageRepository(
             }
         }
     }
+}
+
+internal fun mergeRemoteMessageWithLocalState(
+    incoming: Message,
+    existing: Message?
+): Message {
+    if (existing == null) return incoming
+
+    val preserveLocalFilePath = incoming.fileUniqueId == null || incoming.fileUniqueId == existing.fileUniqueId
+
+    return incoming.copy(
+        topicId = incoming.topicId ?: existing.topicId,
+        senderId = incoming.senderId ?: existing.senderId,
+        replyMsgId = incoming.replyMsgId ?: existing.replyMsgId,
+        replyMsgTopicId = incoming.replyMsgTopicId ?: existing.replyMsgTopicId,
+        fileName = incoming.fileName ?: existing.fileName,
+        fileExtension = incoming.fileExtension ?: existing.fileExtension,
+        fileId = incoming.fileId ?: existing.fileId,
+        fileUniqueId = incoming.fileUniqueId ?: existing.fileUniqueId,
+        fileLocalPath = if (preserveLocalFilePath) existing.fileLocalPath ?: incoming.fileLocalPath else incoming.fileLocalPath,
+        fileSize = incoming.fileSize ?: existing.fileSize,
+        width = incoming.width ?: existing.width,
+        height = incoming.height ?: existing.height,
+        duration = incoming.duration ?: existing.duration,
+        thumbnailFileId = incoming.thumbnailFileId ?: existing.thumbnailFileId,
+        isEdited = incoming.isEdited || existing.isEdited,
+        editedAt = incoming.editedAt ?: existing.editedAt,
+        mediaGroupId = incoming.mediaGroupId ?: existing.mediaGroupId,
+        readStatus = existing.readStatus || incoming.readStatus,
+        isOutgoing = existing.isOutgoing
+    )
 }

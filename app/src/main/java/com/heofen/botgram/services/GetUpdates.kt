@@ -11,16 +11,14 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.heofen.botgram.R
-import com.heofen.botgram.data.remote.TelegramIncomingMessage
 import com.heofen.botgram.data.local.TokenManager
+import com.heofen.botgram.data.remote.TelegramUpdate
+import com.heofen.botgram.data.sync.TelegramUpdateProcessor
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.di.SessionContainer
 import com.heofen.botgram.di.SessionManager
-import com.heofen.botgram.utils.toDbChat
-import com.heofen.botgram.utils.toDbMessage
-import com.heofen.botgram.utils.toDbUser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,6 +38,7 @@ class GetUpdates : Service() {
     private lateinit var messageRepo: MessageRepository
     private lateinit var chatRepo: ChatRepository
     private lateinit var userRepo: UserRepository
+    private lateinit var updateProcessor: TelegramUpdateProcessor
     private var session: SessionContainer? = null
     private var pollingJob: Job? = null
     private var currentToken: String? = null
@@ -76,14 +75,19 @@ class GetUpdates : Service() {
         messageRepo = activeSession.messageRepository
         chatRepo = activeSession.chatRepository
         userRepo = activeSession.userRepository
+        updateProcessor = TelegramUpdateProcessor(
+            chatStore = chatRepo,
+            messageStore = messageRepo,
+            userStore = userRepo
+        )
 
         if (pollingJob?.isActive != true) {
             pollingJob = serviceScope.launch {
                 while (isActive) {
                     try {
                         Log.i("GetUpdates", "Launching Long Polling...")
-                        activeSession.gateway.collectUpdates { message ->
-                            handleMessage(message)
+                        activeSession.gateway.collectUpdates { update ->
+                            handleUpdate(update)
                         }
                     } catch (e: Exception) {
                         Log.e("GetUpdates", "Bot crashed: ${e.message}. Restart from 5 sec...")
@@ -96,29 +100,18 @@ class GetUpdates : Service() {
         return START_STICKY
     }
 
-    private suspend fun handleMessage(message: TelegramIncomingMessage) {
+    private suspend fun handleUpdate(update: TelegramUpdate) {
         try {
-            val dbMessage = message.toDbMessage(isOutgoing = false, readStatus = false)
-            chatRepo.upsertChat(message.chat.toDbChat())
-
-            try {
-                message.sender?.toDbUser()?.let { userRepo.upsertUser(it) }
-            } catch (e: Exception) {
-                Log.e("GetUpdates", "User handle err", e)
-            }
-
-            try {
-                messageRepo.insertMessage(dbMessage)
+            val storedMessage = updateProcessor.process(update)
+            if (storedMessage != null) {
                 serviceScope.launch {
-                    messageRepo.ensureMediaDownloaded(dbMessage)
+                    messageRepo.ensureMediaDownloaded(storedMessage)
                 }
-            } catch (e: Exception) {
-                Log.e("GetUpdates", "Message handle err", e)
             }
-
-            Log.i("GetUpdates", "Success msg handle")
+            Log.i("GetUpdates", "Success update handle")
         } catch (e: Exception) {
-            Log.e("GetUpdates", "Error handling message", e)
+            Log.e("GetUpdates", "Error handling update", e)
+            throw e
         }
     }
 

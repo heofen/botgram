@@ -49,11 +49,20 @@ class TelegramBotApiClient(
         return parseUpdates(requireResultArray(parseApiResponse(json), "getUpdates"))
     }
 
-    suspend fun sendMessage(chatId: Long, text: String): MessageDto {
-        val body = FormBody.Builder()
+    suspend fun sendMessage(
+        chatId: Long,
+        text: String,
+        replyToMessageId: Long? = null
+    ): MessageDto {
+        val bodyBuilder = FormBody.Builder()
             .add("chat_id", chatId.toString())
             .add("text", text)
-            .build()
+
+        if (replyToMessageId != null) {
+            bodyBuilder.add("reply_to_message_id", replyToMessageId.toString())
+        }
+
+        val body = bodyBuilder.build()
 
         val json = postJson("sendMessage", body)
         return parseMessage(requireResultObject(parseApiResponse(json), "sendMessage"))
@@ -230,11 +239,13 @@ class TelegramBotApiClient(
 
         if (!response.ok) {
             throw TelegramApiException(
-                buildString {
+                message = buildString {
                     append("Telegram API error")
                     response.errorCode?.let { append(" $it") }
                     response.description?.let { append(": ").append(it) }
-                }
+                },
+                errorCode = response.errorCode,
+                description = response.description
             )
         }
 
