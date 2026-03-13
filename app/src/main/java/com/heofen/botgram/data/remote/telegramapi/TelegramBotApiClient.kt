@@ -59,6 +59,16 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendMessage"))
     }
 
+    suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean {
+        val body = FormBody.Builder()
+            .add("chat_id", chatId.toString())
+            .add("message_id", messageId.toString())
+            .build()
+
+        val json = postJson("deleteMessage", body)
+        return requireResultBoolean(parseApiResponse(json), "deleteMessage")
+    }
+
     suspend fun getMe(): UserDto {
         val httpUrl = buildMethodUrl(method = "getMe", queryParams = emptyMap())
         val json = getJson(httpUrl)
@@ -266,6 +276,11 @@ class TelegramBotApiClient(
 
     private fun requireResultArray(result: Any?, method: String): JSONArray {
         return result as? JSONArray
+            ?: throw TelegramApiException("Unexpected result type for $method")
+    }
+
+    private fun requireResultBoolean(result: Any?, method: String): Boolean {
+        return result as? Boolean
             ?: throw TelegramApiException("Unexpected result type for $method")
     }
 

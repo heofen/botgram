@@ -78,7 +78,7 @@ interface ChatDao {
             lastMessageSenderId = :senderId
         WHERE id = :chatId
     """)
-    suspend fun updateLastMessage(chatId: Long, type: MessageType, text: String?, time: Long, senderId: Long?)
+    suspend fun updateLastMessage(chatId: Long, type: MessageType?, text: String?, time: Long?, senderId: Long?)
 
 
 //    @Query("UPDATE chats SET isMuted = :isMuted WHERE id = :chatId")

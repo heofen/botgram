@@ -24,7 +24,7 @@ class ChatRepository(
 
     suspend fun upsertChat(chat: Chat) = chatDao.upsert(chat.mergeStoredAvatar())
 
-    suspend fun updateLastMessage(chatId: Long, type: MessageType, text: String?, time: Long, senderId: Long?) =
+    suspend fun updateLastMessage(chatId: Long, type: MessageType?, text: String?, time: Long?, senderId: Long?) =
         chatDao.updateLastMessage(chatId, type, text, time, senderId)
 
     suspend fun updateAvatar(

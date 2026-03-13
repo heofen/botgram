@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">botgram</string>
+    <string name="action_back">Назад</string>
+    <string name="action_send">Отправить</string>
+    <string name="message_input_placeholder">Сообщение...</string>
+    <string name="message_actions_title">Действия с сообщением</string>
+    <string name="message_action_delete">Удалить</string>
+    <string name="message_delete_title">Удалить сообщение?</string>
+    <string name="message_delete_description">Выберите, как удалить это сообщение.</string>
+    <string name="message_delete_cancel">Отмена</string>
+    <string name="message_delete_for_me">Удалить у меня</string>
+    <string name="message_delete_for_everyone">Удалить у всех</string>
+</resources>

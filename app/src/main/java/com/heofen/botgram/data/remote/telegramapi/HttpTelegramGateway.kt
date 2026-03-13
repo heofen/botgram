@@ -39,6 +39,10 @@ class HttpTelegramGateway(
             .toIncomingMessage()
     }
 
+    override suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean {
+        return apiClient.deleteMessage(chatId = chatId, messageId = messageId)
+    }
+
     override suspend fun downloadFile(
         fileId: String,
         fileExtension: String,

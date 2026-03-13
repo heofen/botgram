@@ -120,6 +120,8 @@ import kotlin.math.max
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.res.stringResource
+import com.heofen.botgram.R
 
 
 @Composable
@@ -189,7 +191,7 @@ fun MessageInput(
             ) {
                 if (text.isEmpty()) {
                     Text(
-                        "Сообщение...",
+                        stringResource(R.string.message_input_placeholder),
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
@@ -222,7 +224,7 @@ fun MessageInput(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
+                    contentDescription = stringResource(R.string.action_send),
                 )
             }
         }
@@ -266,7 +268,7 @@ fun GroupScreenBar(
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowBackIosNew,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.action_back),
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
@@ -380,7 +382,8 @@ fun MsgBubble(
     isPersonalMsg: Boolean = false,
     showAvatar: Boolean = !isPersonalMsg && !msg.isOutgoing,
     showSenderName: Boolean = !isPersonalMsg && !msg.isOutgoing,
-    clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single
+    clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single,
+    onClick: (() -> Unit)? = null
 ) {
     val showChrome = !msg.type.isDetachedBubble()
     val isMediaBubble = msg.type.isRichMediaBubble()
@@ -485,6 +488,13 @@ fun MsgBubble(
                                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
                                         shape = bubbleShape
                                     )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .then(
+                            if (onClick != null) {
+                                Modifier.clickable(onClick = onClick)
                             } else {
                                 Modifier
                             }

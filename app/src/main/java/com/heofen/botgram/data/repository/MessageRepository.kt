@@ -55,6 +55,22 @@ class MessageRepository(
     suspend fun deleteOldMessages(chatId: Long, beforeTimestamp: Long) =
         messageDao.deleteOldMessages(chatId, beforeTimestamp)
 
+    suspend fun deleteMessageForMe(chatId: Long, messageId: Long) =
+        messageDao.deleteMessage(chatId, messageId)
+
+    suspend fun deleteMessageForEveryone(chatId: Long, messageId: Long): Boolean {
+        return try {
+            val deleted = gateway.deleteMessage(chatId = chatId, messageId = messageId)
+            if (deleted) {
+                messageDao.deleteMessage(chatId, messageId)
+            }
+            deleted
+        } catch (e: Exception) {
+            Log.e("MessageRepository", "Error deleting message for everyone: ${e.message}", e)
+            false
+        }
+    }
+
     suspend fun fileExists(fileUniqueId: String): Boolean =
         messageDao.fileExists(fileUniqueId)
 

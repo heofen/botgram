@@ -73,6 +73,35 @@ class GroupViewModel(
         }
     }
 
+    fun deleteMessageForMe(message: Message) {
+        viewModelScope.launch {
+            try {
+                messageRepository.deleteMessageForMe(message.chatId, message.messageId)
+                refreshLastMessage()
+            } catch (e: Exception) {
+                Log.e("GroupViewModel", "Failed to delete message locally", e)
+            }
+        }
+    }
+
+    fun deleteMessageForEveryone(message: Message) {
+        viewModelScope.launch {
+            try {
+                val deleted = messageRepository.deleteMessageForEveryone(
+                    chatId = message.chatId,
+                    messageId = message.messageId
+                )
+                if (deleted) {
+                    refreshLastMessage()
+                } else {
+                    Log.w("GroupViewModel", "Message was not deleted for everyone: ${message.messageId}")
+                }
+            } catch (e: Exception) {
+                Log.e("GroupViewModel", "Failed to delete message for everyone", e)
+            }
+        }
+    }
+
     private fun observeGroupData() {
         viewModelScope.launch {
             launch {
@@ -126,5 +155,16 @@ class GroupViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun refreshLastMessage() {
+        val lastMessage = messageRepository.getLastMessage(chatId)
+        chatRepository.updateLastMessage(
+            chatId = chatId,
+            type = lastMessage?.type,
+            text = lastMessage?.text ?: lastMessage?.caption,
+            time = lastMessage?.timestamp,
+            senderId = lastMessage?.senderId
+        )
     }
 }

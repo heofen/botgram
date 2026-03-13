@@ -1,40 +1,58 @@
 package com.heofen.botgram.ui.screens.group
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.heofen.botgram.ChatType
+import com.heofen.botgram.R
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.ui.components.GroupScreenBar
 import com.heofen.botgram.ui.components.MessageDateDivider
 import com.heofen.botgram.ui.components.MessageInput
 import com.heofen.botgram.ui.components.MsgBubble
 import com.heofen.botgram.ui.components.MsgBubbleClusterPosition
+import com.heofen.botgram.ui.theme.BotgramTheme
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import androidx.compose.ui.res.stringResource
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -45,6 +63,8 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val hazeState = remember { HazeState() }
     val horizontalContentPadding = 12.dp
+    var actionMessage by remember { mutableStateOf<Message?>(null) }
+    var deleteMessage by remember { mutableStateOf<Message?>(null) }
 
     Box(
         modifier = Modifier
@@ -117,7 +137,8 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                         isPersonalMsg = isPersonalChat,
                         showAvatar = showAvatar,
                         showSenderName = showSenderName,
-                        clusterPosition = clusterPosition
+                        clusterPosition = clusterPosition,
+                        onClick = { actionMessage = message }
                     )
 
                     Spacer(modifier = Modifier.height(itemSpacing))
@@ -152,7 +173,146 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 onSendClick = viewModel::sendMessage
             )
         }
+
+        if (actionMessage != null) {
+            MessageActionsSheet(
+                onDismissRequest = { actionMessage = null },
+                onDeleteClick = {
+                    deleteMessage = actionMessage
+                    actionMessage = null
+                }
+            )
+        }
+
+        if (deleteMessage != null) {
+            DeleteMessageDialog(
+                onDismissRequest = { deleteMessage = null },
+                onDeleteForMe = {
+                    deleteMessage?.let(viewModel::deleteMessageForMe)
+                    deleteMessage = null
+                },
+                onDeleteForEveryone = {
+                    deleteMessage?.let(viewModel::deleteMessageForEveryone)
+                    deleteMessage = null
+                }
+            )
+        }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MessageActionsSheet(
+    onDismissRequest: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+        Text(
+            text = stringResource(R.string.message_actions_title),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+        )
+
+        ListItem(
+            headlineContent = {
+                Text(text = stringResource(R.string.message_action_delete))
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onDeleteClick)
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun DeleteMessageDialog(
+    onDismissRequest: () -> Unit,
+    onDeleteForMe: () -> Unit,
+    onDeleteForEveryone: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Text(text = stringResource(R.string.message_delete_title))
+        },
+        text = {
+            Box(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.message_delete_description),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+
+                    TextButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                    ) {
+                        Text(
+                            text = stringResource(R.string.message_delete_cancel),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        TextButton(
+                            onClick = onDeleteForMe,
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                        ) {
+                            Text(
+                                text = stringResource(R.string.message_delete_for_me),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+
+                        TextButton(
+                            onClick = onDeleteForEveryone,
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                        ) {
+                            Text(
+                                text = stringResource(R.string.message_delete_for_everyone),
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {},
+        confirmButton = {}
+    )
 }
 
 private const val MESSAGE_CLUSTER_WINDOW_MS = 5 * 60 * 1000L
@@ -170,3 +330,38 @@ private fun isSameCalendarDay(first: Message, second: Message): Boolean =
 
 private fun messageDay(timestamp: Long): LocalDate =
     Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+
+@Preview(showBackground = true, backgroundColor = 0xFFF3F5F7)
+@Composable
+private fun MessageActionsSheetPreview() {
+    BotgramTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            MessageActionsSheet(
+                onDismissRequest = {},
+                onDeleteClick = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF3F5F7)
+@Composable
+private fun DeleteMessageDialogPreview() {
+    BotgramTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            DeleteMessageDialog(
+                onDismissRequest = {},
+                onDeleteForMe = {},
+                onDeleteForEveryone = {}
+            )
+        }
+    }
+}

@@ -11,6 +11,8 @@ interface TelegramGateway {
 
     suspend fun sendTextMessage(chatId: Long, text: String): TelegramIncomingMessage
 
+    suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean
+
     suspend fun downloadFile(
         fileId: String,
         fileExtension: String,

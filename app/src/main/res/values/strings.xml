@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">botgram</string>
+    <string name="action_back">Back</string>
+    <string name="action_send">Send</string>
+    <string name="message_input_placeholder">Message...</string>
+    <string name="message_actions_title">Message actions</string>
+    <string name="message_action_delete">Delete</string>
+    <string name="message_delete_title">Delete message?</string>
+    <string name="message_delete_description">Choose how to delete this message.</string>
+    <string name="message_delete_cancel">Cancel</string>
+    <string name="message_delete_for_me">Delete for me</string>
+    <string name="message_delete_for_everyone">Delete for everyone</string>
 </resources>
