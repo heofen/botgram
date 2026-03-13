@@ -8,6 +8,8 @@
     <string name="message_delete_title">Удалить сообщение?</string>
     <string name="message_delete_description">Выберите, как удалить это сообщение.</string>
     <string name="message_delete_cancel">Отмена</string>
-    <string name="message_delete_for_me">Удалить у меня</string>
-    <string name="message_delete_for_everyone">Удалить у всех</string>
+    <string name="message_delete_for_me">У меня</string>
+    <string name="message_delete_for_everyone">У всех</string>
+    <string name="message_reply_title">Ответ</string>
+    <string name="action_cancel_reply">Отменить ответ</string>
 </resources>

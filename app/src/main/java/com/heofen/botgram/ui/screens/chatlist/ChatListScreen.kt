@@ -1,17 +1,15 @@
 package com.heofen.botgram.ui.screens.chatlist
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -67,8 +65,6 @@ fun ChatListScreen(
 
                 HorizontalDivider()
 
-                Spacer(modifier = Modifier.height(12.dp))
-
                 NavigationDrawerItem(
                     label = { Text(text = "Log Out") },
                     selected = false,
@@ -104,21 +100,22 @@ fun ChatListScreen(
             ) {
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
+                        .fillMaxSize(),
                     contentPadding = innerPadding
                 ) {
-                    items(chats, key = { it.chat.id }) { chat ->
+                    itemsIndexed(chats, key = { _, chat -> chat.chat.id }) { index, chat ->
                         ChatCell(
                             item = chat,
                             onChatSellClick = {
                                 onChatClick(chat.chat.id)
                             }
                         )
-                        Spacer(
-                            modifier = Modifier
-                                .height(8.dp)
-                        )
+                        if (index < chats.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 82.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                            )
+                        }
                     }
                 }
             }

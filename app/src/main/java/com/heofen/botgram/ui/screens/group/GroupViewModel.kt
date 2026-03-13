@@ -24,7 +24,8 @@ data class GroupUiState(
     val messages: List<Message> = emptyList(),
     val users: Map<Long, User> = emptyMap(),
     val isLoading: Boolean = true,
-    val messageText: String = ""
+    val messageText: String = "",
+    val replyToMessageId: Long? = null
 )
 
 class GroupViewModel(
@@ -48,16 +49,30 @@ class GroupViewModel(
         _uiState.update { it.copy(messageText = text) }
     }
 
+    fun selectReplyMessage(message: Message) {
+        _uiState.update { it.copy(replyToMessageId = message.messageId) }
+    }
+
+    fun clearReplyMessage() {
+        _uiState.update { it.copy(replyToMessageId = null) }
+    }
+
     fun sendMessage() {
         val text = _uiState.value.messageText
+        val replyToMessageId = _uiState.value.replyToMessageId
         if (text.isBlank()) return
 
         viewModelScope.launch {
             try {
                 _uiState.update { it.copy(messageText = "") }
 
-                val sentMessage = messageRepository.sendTextMessage(chatId, text)
+                val sentMessage = messageRepository.sendTextMessage(
+                    chatId = chatId,
+                    text = text,
+                    replyToMessageId = replyToMessageId
+                )
                 if (sentMessage != null) {
+                    _uiState.update { it.copy(replyToMessageId = null) }
                     chatRepository.updateLastMessage(
                         chatId = sentMessage.chatId,
                         type = sentMessage.type,

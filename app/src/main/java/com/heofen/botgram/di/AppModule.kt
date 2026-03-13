@@ -64,7 +64,7 @@ fun appModule(appContainer: AppContainer) = module {
     factory { get<SessionContainer>().messageRepository }
     factory { get<SessionContainer>().userRepository }
 
-    viewModel { ChatListViewModel(get(), get()) }
+    viewModel { ChatListViewModel(get()) }
     viewModel { params ->
         GroupViewModel(
             chatId = params.get(),

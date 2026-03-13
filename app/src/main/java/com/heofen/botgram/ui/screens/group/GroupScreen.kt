@@ -2,6 +2,7 @@ package com.heofen.botgram.ui.screens.group
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,7 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,7 +42,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.heofen.botgram.ChatType
@@ -57,6 +64,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @Composable
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
@@ -65,6 +74,11 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val horizontalContentPadding = 12.dp
     var actionMessage by remember { mutableStateOf<Message?>(null) }
     var deleteMessage by remember { mutableStateOf<Message?>(null) }
+    val messagesById = remember(uiState.messages) {
+        uiState.messages.associateBy { it.messageId }
+    }
+    val selectedReplyMessage = uiState.replyToMessageId?.let(messagesById::get)
+    val selectedReplySender = selectedReplyMessage?.senderId?.let { uiState.users[it] }
 
     Box(
         modifier = Modifier
@@ -76,14 +90,11 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
         } else {
             val isPersonalChat = uiState.chat?.type == ChatType.PRIVATE
             val layoutDirection = LocalLayoutDirection.current
-            val messagesById = remember(uiState.messages) {
-                uiState.messages.associateBy { it.messageId }
-            }
 
             val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
             val topContentPadding = statusBarPadding.calculateTopPadding() + 64.dp
 
-            val bottomInputPadding = 70.dp
+            val bottomInputPadding = if (selectedReplyMessage != null) 126.dp else 70.dp
 
             LazyColumn(
                 modifier = Modifier
@@ -134,6 +145,9 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                         sender = foundSender,
                         replyToMessage = replyToMessage,
                         replySender = replyToSender,
+                        modifier = replySwipeModifier(
+                            onReply = { viewModel.selectReplyMessage(message) }
+                        ),
                         isPersonalMsg = isPersonalChat,
                         showAvatar = showAvatar,
                         showSenderName = showSenderName,
@@ -169,8 +183,11 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             MessageInput(
                 text = uiState.messageText,
                 hazeState = hazeState,
+                replyMessage = selectedReplyMessage,
+                replySender = selectedReplySender,
                 onTextChange = viewModel::onMessageChange,
-                onSendClick = viewModel::sendMessage
+                onSendClick = viewModel::sendMessage,
+                onCancelReply = viewModel::clearReplyMessage
             )
         }
 
@@ -198,6 +215,48 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun replySwipeModifier(onReply: () -> Unit): Modifier {
+    val density = LocalDensity.current
+    val triggerDistancePx = with(density) { 72.dp.toPx() }
+    val maxOffsetPx = with(density) { 96.dp.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    var replyTriggered by remember { mutableStateOf(false) }
+
+    return Modifier
+        .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+        .pointerInput(onReply) {
+            detectHorizontalDragGestures(
+                onDragStart = {
+                    replyTriggered = false
+                },
+                onHorizontalDrag = { change, dragAmount ->
+                    val nextOffset = (offsetX.value + dragAmount).coerceIn(0f, maxOffsetPx)
+                    change.consume()
+                    coroutineScope.launch {
+                        offsetX.snapTo(nextOffset)
+                    }
+
+                    if (!replyTriggered && nextOffset >= triggerDistancePx) {
+                        replyTriggered = true
+                        onReply()
+                    }
+                },
+                onDragEnd = {
+                    coroutineScope.launch {
+                        offsetX.animateTo(0f)
+                    }
+                },
+                onDragCancel = {
+                    coroutineScope.launch {
+                        offsetX.animateTo(0f)
+                    }
+                }
+            )
+        }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -245,7 +304,7 @@ private fun DeleteMessageDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.0f),
                             shape = RoundedCornerShape(20.dp)
                         )
                         .padding(12.dp),
@@ -257,21 +316,6 @@ private fun DeleteMessageDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
-
-                    TextButton(
-                        onClick = onDismissRequest,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                    ) {
-                        Text(
-                            text = stringResource(R.string.message_delete_cancel),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -306,6 +350,21 @@ private fun DeleteMessageDialog(
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
+                    }
+
+                    TextButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                    ) {
+                        Text(
+                            text = stringResource(R.string.message_delete_cancel),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             }

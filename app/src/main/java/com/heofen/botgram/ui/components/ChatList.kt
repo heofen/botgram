@@ -1,12 +1,5 @@
 package com.heofen.botgram.ui.components
 
-import android.media.MediaMetadataRetriever
-import android.net.Uri
-import android.os.Build
-import android.view.TextureView
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,46 +20,29 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.GifBox
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import coil.ImageLoader
 import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
-import coil.decode.GifDecoder
-import coil.decode.ImageDecoderDecoder
-import coil.request.ImageRequest
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.ChatListItem
-import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.ui.theme.botgramHazeStyle
 import com.heofen.botgram.utils.extensions.getInitials
@@ -74,7 +50,6 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import java.io.File
 import java.time.Instant
-import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -257,113 +232,88 @@ fun ChatCell(
     onChatSellClick: (Long) -> Unit = {}
 ) {
     val chat = item.chat
-    val lastMessage = item.lastMessage
+    val title = when {
+        !chat.title.isNullOrBlank() -> chat.title
+        else -> listOfNotNull(chat.firstName, chat.lastName)
+            .joinToString(" ")
+            .ifBlank { "Unknown chat" }
+    }
+    val formattedTime = formatChatTime(chat.lastMessageTime)
+    val preview = chat.previewText()
 
-    Box(
+    Row(
         modifier = Modifier
-            .fillMaxWidth(),
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .clickable { onChatSellClick(chat.id) }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        ChatAvatar(
+            chat = chat,
+            modifier = Modifier.size(54.dp)
+        )
+
+        Column(
             modifier = Modifier
-                .background(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .fillMaxWidth()
-                .clickable { onChatSellClick(chat.id) }
-                .padding(8.dp)
+                .padding(start = 12.dp)
+                .weight(1f)
         ) {
-            ChatAvatar(
-                chat = chat,
-                modifier = Modifier.size(50.dp)
-            )
-
-            Column(
-                modifier = Modifier
-                    .padding(
-                        horizontal = 8.dp,
-                        vertical = 2.dp
-                    )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val title: String = when {
-                        chat.title != null -> chat.title
-                        else -> (chat.firstName ?: "") + " " + (chat.lastName ?: "")
-                    }
+                Text(
+                    text = title,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                if (formattedTime.isNotEmpty()) {
                     Text(
-                        text = title,
-                        overflow = TextOverflow.Ellipsis,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-
-                    val instant = Instant.ofEpochMilli(chat.lastMessageTime ?: 0)
-                    val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-
-                    val formatter = DateTimeFormatter.ofPattern("HH:mm")
-                    val formattedDate = dateTime.format(formatter)
-
-                    Text(
-                        text = formattedDate,
+                        text = formattedTime,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.End,
                         maxLines = 1,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 10.dp)
                     )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (lastMessage != null && lastMessage.type.isInlinePreviewType()) {
-                        InlineMediaPreview(
-                            message = lastMessage,
-                            modifier = Modifier
-                                .padding(top = 4.dp)
-                                .weight(1f)
-                        )
-                    } else if (chat.lastMessageType == MessageType.TEXT) {
-                        val preview = chat.lastMessageText
-                            ?: "⚠\uFE0F Тут явно что-то пошло не по плану"
+            }
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = preview,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (unreadedCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 10.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = preview,
-                            overflow = TextOverflow.Ellipsis,
-                            maxLines = 1,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Light,
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    } else {
-                        val preview: String = when (chat.lastMessageType) {
-                            MessageType.PHOTO -> "Photo"
-                            MessageType.VIDEO -> "Video"
-                            MessageType.ANIMATION -> "GIF"
-                            MessageType.AUDIO -> "Audio"
-                            MessageType.VOICE -> "Voice message"
-                            MessageType.VIDEO_NOTE -> "Video message"
-                            MessageType.DOCUMENT -> "Document"
-                            MessageType.STICKER -> "Sticker"
-                            MessageType.ANIMATED_STICKER -> "Sticker"
-                            MessageType.VIDEO_STICKER -> "Sticker"
-                            MessageType.CONTACT -> "Contact"
-                            MessageType.LOCATION -> "Location"
-                            else -> "⚠\uFE0F Тут явно что-то пошло не по плану"
-                        }
-                        Text(
-                            text = preview,
-                            overflow = TextOverflow.Ellipsis,
-                            maxLines = 1,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Light,
-                            color = Color.Blue,
-                            modifier = Modifier.weight(1f)
+                            text = if (unreadedCount > 99) "99+" else unreadedCount.toString(),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -372,236 +322,38 @@ fun ChatCell(
     }
 }
 
-@Composable
-private fun InlineMediaPreview(
-    message: Message,
-    modifier: Modifier = Modifier
-) {
-    val file = message.fileLocalPath?.let(::File)
-    val renderMode = remember(message.type, file?.path) {
-        resolveAnimatedPreviewMode(message.type, file)
-    }
+private fun formatChatTime(timestampMillis: Long?): String {
+    if (timestampMillis == null || timestampMillis <= 0L) return ""
 
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.32f))
-            .padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        when (renderMode) {
-            ChatInlinePreviewMode.GIF -> GifPreview(file)
-            ChatInlinePreviewMode.VIDEO -> VideoPreview(file, forceAutoplay = true)
-            ChatInlinePreviewMode.NONE -> Unit
-        }
-
-        val label = if (message.type == MessageType.ANIMATION) "GIF" else "Video"
-        val previewText = message.caption?.takeIf { it.isNotBlank() }
-            ?: message.fileName?.takeIf { it.isNotBlank() }
-            ?: label
-
-        Column(
-            modifier = Modifier
-                .padding(start = 8.dp)
-                .weight(1f)
-        ) {
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = previewText,
-                overflow = TextOverflow.Ellipsis,
-                maxLines = 2,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
-    }
-}
-
-@Composable
-private fun GifPreview(file: File?) {
-    val context = LocalContext.current
-    val inspectionMode = LocalInspectionMode.current
-    val imageLoader = remember(context) {
-        ImageLoader.Builder(context)
-            .components {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    add(ImageDecoderDecoder.Factory())
-                } else {
-                    add(GifDecoder.Factory())
-                }
-            }
-            .build()
-    }
-
-    Box(
-        modifier = Modifier
-            .size(width = 88.dp, height = 60.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        if (!inspectionMode && file != null && file.exists()) {
-            Image(
-                painter = rememberAsyncImagePainter(
-                    model = ImageRequest.Builder(context)
-                        .data(file)
-                        .allowHardware(false)
-                        .crossfade(true)
-                        .build(),
-                    imageLoader = imageLoader
-                ),
-                contentDescription = "GIF preview",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.GifBox,
-                contentDescription = "GIF preview",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun VideoPreview(
-    file: File?,
-    forceAutoplay: Boolean = false
-) {
-    val inspectionMode = LocalInspectionMode.current
-    val existingFile = file?.takeIf(File::exists)
-    val shouldAutoplay = remember(existingFile?.absolutePath) {
-        existingFile?.let { forceAutoplay || !videoHasAudio(it) } ?: false
-    }
-
-    Box(
-        modifier = Modifier
-            .size(width = 88.dp, height = 60.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        if (!inspectionMode && existingFile != null) {
-            InlineVideoPlayer(
-                file = existingFile,
-                autoplay = shouldAutoplay
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.18f))
-        )
-        Icon(
-            imageVector = Icons.Default.PlayArrow,
-            contentDescription = "Video preview",
-            tint = Color.White,
-            modifier = Modifier.size(26.dp)
-        )
-    }
-}
-
-@Composable
-private fun InlineVideoPlayer(
-    file: File,
-    autoplay: Boolean
-) {
-    val context = LocalContext.current
-    val fileUri = remember(file.absolutePath) { Uri.fromFile(file) }
-    val exoPlayer = remember(file.absolutePath, autoplay) {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_ONE
-            volume = 0f
-            playWhenReady = autoplay
-            setMediaItem(MediaItem.fromUri(fileUri))
-            prepare()
-        }
-    }
-
-    LaunchedEffect(exoPlayer, fileUri, autoplay) {
-        exoPlayer.setMediaItem(MediaItem.fromUri(fileUri))
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = autoplay
-        if (autoplay) {
-            exoPlayer.play()
-        }
-    }
-
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (autoplay && playbackState == Player.STATE_READY) {
-                    exoPlayer.playWhenReady = true
-                    exoPlayer.play()
-                }
-            }
-        }
-        exoPlayer.addListener(listener)
-        onDispose {
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
-        }
-    }
-
-    AndroidView(
-        factory = { viewContext ->
-            TextureView(viewContext).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            }
-        },
-        modifier = Modifier.fillMaxSize(),
-        update = { textureView ->
-            exoPlayer.setVideoTextureView(textureView)
-        }
-    )
-
-    DisposableEffect(exoPlayer) {
-        onDispose {
-            exoPlayer.clearVideoSurface()
-        }
-    }
-}
-
-private fun MessageType?.isInlinePreviewType(): Boolean =
-    this == MessageType.VIDEO || this == MessageType.ANIMATION
-
-private enum class ChatInlinePreviewMode {
-    GIF,
-    VIDEO,
-    NONE
-}
-
-private fun resolveAnimatedPreviewMode(
-    type: MessageType,
-    file: File?
-): ChatInlinePreviewMode {
-    val extension = file?.extension?.lowercase()
-    return when {
-        type == MessageType.VIDEO -> ChatInlinePreviewMode.VIDEO
-        type == MessageType.ANIMATION && extension in setOf("gif", "webp") -> ChatInlinePreviewMode.GIF
-        type == MessageType.ANIMATION && file != null -> ChatInlinePreviewMode.VIDEO
-        else -> ChatInlinePreviewMode.NONE
-    }
-}
-
-private fun videoHasAudio(file: File): Boolean {
-    val retriever = MediaMetadataRetriever()
     return runCatching {
-        retriever.setDataSource(file.absolutePath)
-        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
-    }.getOrDefault(false).also {
-        retriever.release()
+        Instant.ofEpochMilli(timestampMillis)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("HH:mm"))
+    }.getOrDefault("")
+}
+
+private fun Chat.previewText(): String {
+    val textPreview = lastMessageText?.trim().orEmpty()
+    if (lastMessageType == MessageType.TEXT && textPreview.isNotEmpty()) {
+        return textPreview
+    }
+
+    return when (lastMessageType) {
+        MessageType.TEXT -> "Сообщение"
+        MessageType.PHOTO -> "Фото"
+        MessageType.VIDEO -> "Видео"
+        MessageType.ANIMATION -> "GIF"
+        MessageType.AUDIO -> "Аудио"
+        MessageType.VOICE -> "Голосовое сообщение"
+        MessageType.VIDEO_NOTE -> "Видеосообщение"
+        MessageType.DOCUMENT -> "Документ"
+        MessageType.STICKER,
+        MessageType.ANIMATED_STICKER,
+        MessageType.VIDEO_STICKER -> "Стикер"
+        MessageType.CONTACT -> "Контакт"
+        MessageType.LOCATION -> "Локация"
+        null -> ""
+        else -> "Сообщение"
     }
 }
 

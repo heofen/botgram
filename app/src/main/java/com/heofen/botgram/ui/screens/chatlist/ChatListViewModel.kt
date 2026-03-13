@@ -2,9 +2,7 @@ package com.heofen.botgram.ui.screens.chatlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.repository.ChatRepository
-import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.database.tables.ChatListItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -18,11 +16,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class ChatListViewModel(
-    private val chatRepository: ChatRepository,
-    private val messageRepository: MessageRepository
+    private val chatRepository: ChatRepository
 ) : ViewModel() {
     private val avatarLoadRequested = mutableSetOf<Long>()
-    private val mediaLoadRequested = mutableSetOf<Pair<Long, Long>>()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -52,13 +48,6 @@ class ChatListViewModel(
                     if (avatarLoadRequested.add(chat.chat.id)) {
                         chatRepository.loadAvatarIfMissing(chat.chat.id)
                     }
-
-                    val lastMessage = chat.lastMessage ?: return@forEach
-                    if (!lastMessage.type.isInlinePreviewType()) return@forEach
-
-                    if (mediaLoadRequested.add(lastMessage.chatId to lastMessage.messageId)) {
-                        messageRepository.ensureMediaDownloaded(lastMessage)
-                    }
                 }
             }
         }
@@ -74,7 +63,4 @@ class ChatListViewModel(
             _searchQuery.value = ""
         }
     }
-
-    private fun MessageType.isInlinePreviewType(): Boolean =
-        this == MessageType.VIDEO || this == MessageType.ANIMATION
 }
