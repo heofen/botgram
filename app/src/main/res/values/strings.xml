@@ -2,6 +2,8 @@
     <string name="app_name">botgram</string>
     <string name="action_back">Back</string>
     <string name="action_send">Send</string>
+    <string name="action_attach_media">Attach media</string>
+    <string name="action_remove_media">Remove media</string>
     <string name="message_input_placeholder">Message...</string>
     <string name="message_actions_title">Message actions</string>
     <string name="message_action_delete">Delete</string>

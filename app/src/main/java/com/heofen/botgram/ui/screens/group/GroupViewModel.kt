@@ -3,6 +3,7 @@ package com.heofen.botgram.ui.screens.group
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 data class GroupUiState(
     val chat: Chat? = null,
@@ -25,7 +27,14 @@ data class GroupUiState(
     val users: Map<Long, User> = emptyMap(),
     val isLoading: Boolean = true,
     val messageText: String = "",
-    val replyToMessageId: Long? = null
+    val replyToMessageId: Long? = null,
+    val pendingMedia: List<ComposerMediaItem> = emptyList()
+)
+
+data class ComposerMediaItem(
+    val localPath: String,
+    val mimeType: String,
+    val fileName: String
 )
 
 class GroupViewModel(
@@ -58,33 +67,86 @@ class GroupViewModel(
     }
 
     fun sendMessage() {
-        val text = _uiState.value.messageText
-        val replyToMessageId = _uiState.value.replyToMessageId
-        if (text.isBlank()) return
+        val state = _uiState.value
+        val text = state.messageText.trim()
+        val replyToMessageId = state.replyToMessageId
+        val pendingMedia = state.pendingMedia
+        if (text.isBlank() && pendingMedia.isEmpty()) return
 
         viewModelScope.launch {
             try {
-                _uiState.update { it.copy(messageText = "") }
-
-                val sentMessage = messageRepository.sendTextMessage(
-                    chatId = chatId,
-                    text = text,
-                    replyToMessageId = replyToMessageId
-                )
-                if (sentMessage != null) {
-                    _uiState.update { it.copy(replyToMessageId = null) }
-                    chatRepository.updateLastMessage(
-                        chatId = sentMessage.chatId,
-                        type = sentMessage.type,
-                        text = sentMessage.text ?: sentMessage.caption,
-                        time = sentMessage.timestamp,
-                        senderId = sentMessage.senderId
+                if (pendingMedia.isNotEmpty()) {
+                    val sentMessages = messageRepository.sendVisualMediaMessages(
+                        chatId = chatId,
+                        media = pendingMedia.map {
+                            OutgoingVisualMedia(
+                                file = File(it.localPath),
+                                mimeType = it.mimeType
+                            )
+                        },
+                        caption = text.ifBlank { null },
+                        replyToMessageId = replyToMessageId
                     )
+                    val lastSentMessage = sentMessages.lastOrNull()
+                    if (lastSentMessage != null) {
+                        _uiState.update {
+                            it.copy(
+                                messageText = "",
+                                replyToMessageId = null,
+                                pendingMedia = emptyList()
+                            )
+                        }
+                        chatRepository.updateLastMessage(
+                            chatId = lastSentMessage.chatId,
+                            type = lastSentMessage.type,
+                            text = lastSentMessage.text ?: lastSentMessage.caption,
+                            time = lastSentMessage.timestamp,
+                            senderId = lastSentMessage.senderId
+                        )
+                    }
+                } else {
+                    val sentMessage = messageRepository.sendTextMessage(
+                        chatId = chatId,
+                        text = text,
+                        replyToMessageId = replyToMessageId
+                    )
+                    if (sentMessage != null) {
+                        _uiState.update {
+                            it.copy(
+                                messageText = "",
+                                replyToMessageId = null
+                            )
+                        }
+                        chatRepository.updateLastMessage(
+                            chatId = sentMessage.chatId,
+                            type = sentMessage.type,
+                            text = sentMessage.text ?: sentMessage.caption,
+                            time = sentMessage.timestamp,
+                            senderId = sentMessage.senderId
+                        )
+                    }
                 }
-
             } catch (e: Exception) {
                 Log.e("GroupViewModel", "Failed to send message", e)
             }
+        }
+    }
+
+    fun addPendingMedia(items: List<ComposerMediaItem>) {
+        if (items.isEmpty()) return
+        _uiState.update { state ->
+            val existing = state.pendingMedia.mapTo(mutableSetOf()) { it.localPath }
+            state.copy(
+                pendingMedia = state.pendingMedia + items.filter { existing.add(it.localPath) }
+            )
+        }
+    }
+
+    fun removePendingMedia(localPath: String) {
+        _uiState.update { state ->
+            state.copy(
+                pendingMedia = state.pendingMedia.filterNot { it.localPath == localPath }
+            )
         }
     }
 

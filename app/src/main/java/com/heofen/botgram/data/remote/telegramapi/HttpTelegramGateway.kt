@@ -5,6 +5,7 @@ import android.util.Log
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.remote.AvatarDownloadResult
+import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.remote.TelegramChat
 import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
@@ -57,6 +58,52 @@ class HttpTelegramGateway(
             replyToMessageId = replyToMessageId
         )
             .toIncomingMessage()
+    }
+
+    override suspend fun sendPhotoMessage(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String?,
+        replyToMessageId: Long?
+    ): TelegramIncomingMessage {
+        return apiClient.sendPhoto(
+            chatId = chatId,
+            file = file,
+            mimeType = mimeType,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        ).toIncomingMessage()
+    }
+
+    override suspend fun sendVideoMessage(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String?,
+        replyToMessageId: Long?
+    ): TelegramIncomingMessage {
+        return apiClient.sendVideo(
+            chatId = chatId,
+            file = file,
+            mimeType = mimeType,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        ).toIncomingMessage()
+    }
+
+    override suspend fun sendVisualMediaGroup(
+        chatId: Long,
+        media: List<OutgoingVisualMedia>,
+        caption: String?,
+        replyToMessageId: Long?
+    ): List<TelegramIncomingMessage> {
+        return apiClient.sendMediaGroup(
+            chatId = chatId,
+            media = media,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        ).map(MessageDto::toIncomingMessage)
     }
 
     override suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean {

@@ -1,5 +1,12 @@
 package com.heofen.botgram.ui.screens.group
 
+import android.content.ContentResolver
+import android.database.Cursor
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -62,17 +69,24 @@ import com.heofen.botgram.ui.theme.BotgramTheme
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.io.File
+import java.io.IOException
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val hazeState = remember { HazeState() }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val horizontalContentPadding = 12.dp
     var actionMessage by remember { mutableStateOf<Message?>(null) }
@@ -80,6 +94,32 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     var composerHeightPx by remember { mutableStateOf(0) }
     val messagesById = remember(uiState.messages) {
         uiState.messages.associateBy { it.messageId }
+    }
+    val mediaPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+
+        coroutineScope.launch {
+            val preparedMedia = withContext(Dispatchers.IO) {
+                uris.mapNotNull { uri ->
+                    prepareVisualMediaForUpload(
+                        contentResolver = context.contentResolver,
+                        cacheDir = context.cacheDir,
+                        uri = uri
+                    )
+                }
+            }
+            viewModel.addPendingMedia(
+                preparedMedia.map {
+                    ComposerMediaItem(
+                        localPath = it.localPath,
+                        mimeType = it.mimeType,
+                        fileName = it.fileName
+                    )
+                }
+            )
+        }
     }
     val selectedReplyMessage = uiState.replyToMessageId?.let(messagesById::get)
     val selectedReplySender = selectedReplyMessage?.senderId?.let { uiState.users[it] }
@@ -194,8 +234,17 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 hazeState = hazeState,
                 replyMessage = selectedReplyMessage,
                 replySender = selectedReplySender,
+                pendingMedia = uiState.pendingMedia,
                 onTextChange = viewModel::onMessageChange,
+                onAttachClick = {
+                    mediaPickerLauncher.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                        )
+                    )
+                },
                 onSendClick = viewModel::sendMessage,
+                onRemovePendingMedia = viewModel::removePendingMedia,
                 onCancelReply = viewModel::clearReplyMessage
             )
         }
@@ -224,6 +273,57 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             )
         }
     }
+}
+
+private data class PreparedVisualMedia(
+    val localPath: String,
+    val mimeType: String,
+    val fileName: String
+)
+
+private fun prepareVisualMediaForUpload(
+    contentResolver: ContentResolver,
+    cacheDir: File,
+    uri: Uri
+): PreparedVisualMedia? {
+    val mimeType = contentResolver.getType(uri)?.takeIf {
+        it.startsWith("image/") || it.startsWith("video/")
+    } ?: return null
+    val displayName = contentResolver.queryDisplayName(uri)
+    val extension = displayName
+        ?.substringAfterLast('.', "")
+        ?.takeIf { it.isNotBlank() }
+        ?: mimeType.substringAfter('/', "").substringBefore(';')
+    val uploadsDir = File(cacheDir, "uploads").apply { mkdirs() }
+    val targetFile = File(
+        uploadsDir,
+        "upload_${System.nanoTime()}.${extension.ifBlank { "bin" }}"
+    )
+
+    contentResolver.openInputStream(uri)?.use { input ->
+        targetFile.outputStream().use { output ->
+            input.copyTo(output)
+        }
+    } ?: throw IOException("Unable to open selected media")
+
+    return PreparedVisualMedia(
+        localPath = targetFile.absolutePath,
+        mimeType = mimeType,
+        fileName = displayName ?: targetFile.name
+    )
+}
+
+private fun ContentResolver.queryDisplayName(uri: Uri): String? {
+    return query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        cursor.getStringOrNull(OpenableColumns.DISPLAY_NAME)
+    }
+}
+
+private fun Cursor.getStringOrNull(columnName: String): String? {
+    val index = getColumnIndex(columnName)
+    if (index == -1 || isNull(index)) return null
+    return getString(index)
 }
 
 @Composable

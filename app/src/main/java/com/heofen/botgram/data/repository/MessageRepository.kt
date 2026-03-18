@@ -2,6 +2,7 @@ package com.heofen.botgram.data.repository
 
 import android.util.Log
 import com.heofen.botgram.data.MediaManager
+import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
 import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.sync.MessageSyncStore
@@ -112,6 +113,94 @@ class MessageRepository(
         } catch (e: Exception) {
             Log.e("MessageRepository", "Error sending message: ${e.message}")
             null
+        }
+    }
+
+    suspend fun sendVisualMediaMessage(
+        chatId: Long,
+        localFile: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): Message? {
+        return try {
+            val sentMessage = when {
+                mimeType.startsWith("image/") -> gateway.sendPhotoMessage(
+                    chatId = chatId,
+                    file = localFile,
+                    mimeType = mimeType,
+                    caption = caption,
+                    replyToMessageId = replyToMessageId
+                )
+                mimeType.startsWith("video/") -> gateway.sendVideoMessage(
+                    chatId = chatId,
+                    file = localFile,
+                    mimeType = mimeType,
+                    caption = caption,
+                    replyToMessageId = replyToMessageId
+                )
+                else -> {
+                    Log.w("MessageRepository", "Unsupported visual media mime type: $mimeType")
+                    return null
+                }
+            }
+
+            val dbMessage = sentMessage.toDbMessage(isOutgoing = true, readStatus = true).copy(
+                fileLocalPath = localFile.absolutePath,
+                fileName = sentMessage.fileName ?: localFile.name,
+                fileExtension = sentMessage.fileExtension
+                    ?: localFile.extension.takeIf { it.isNotBlank() }
+            )
+            messageDao.insert(dbMessage)
+            Log.i("MessageRepository", "Visual media sent: ${sentMessage.messageId}")
+            dbMessage
+        } catch (e: Exception) {
+            Log.e("MessageRepository", "Error sending visual media: ${e.message}", e)
+            null
+        }
+    }
+
+    suspend fun sendVisualMediaMessages(
+        chatId: Long,
+        media: List<OutgoingVisualMedia>,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): List<Message> {
+        if (media.isEmpty()) return emptyList()
+        if (media.size == 1) {
+            return listOfNotNull(
+                sendVisualMediaMessage(
+                    chatId = chatId,
+                    localFile = media.first().file,
+                    mimeType = media.first().mimeType,
+                    caption = caption,
+                    replyToMessageId = replyToMessageId
+                )
+            )
+        }
+
+        return try {
+            val sentMessages = gateway.sendVisualMediaGroup(
+                chatId = chatId,
+                media = media,
+                caption = caption,
+                replyToMessageId = replyToMessageId
+            )
+            val dbMessages = sentMessages.mapIndexed { index, sentMessage ->
+                val localFile = media.getOrNull(index)?.file
+                sentMessage.toDbMessage(isOutgoing = true, readStatus = true).copy(
+                    fileLocalPath = localFile?.absolutePath,
+                    fileName = sentMessage.fileName ?: localFile?.name,
+                    fileExtension = sentMessage.fileExtension
+                        ?: localFile?.extension?.takeIf { it.isNotBlank() }
+                )
+            }
+            messageDao.insertAll(dbMessages)
+            Log.i("MessageRepository", "Visual media group sent: ${dbMessages.size}")
+            dbMessages
+        } catch (e: Exception) {
+            Log.e("MessageRepository", "Error sending visual media group: ${e.message}", e)
+            emptyList()
         }
     }
 

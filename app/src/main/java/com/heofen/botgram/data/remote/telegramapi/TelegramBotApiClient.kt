@@ -1,6 +1,7 @@
 package com.heofen.botgram.data.remote.telegramapi
 
 import android.util.Log
+import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Cache
@@ -8,8 +9,11 @@ import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -66,6 +70,60 @@ class TelegramBotApiClient(
 
         val json = postJson("sendMessage", body)
         return parseMessage(requireResultObject(parseApiResponse(json), "sendMessage"))
+    }
+
+    suspend fun sendPhoto(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): MessageDto {
+        val body = buildMultipartMediaBody(
+            fieldName = "photo",
+            chatId = chatId,
+            file = file,
+            mimeType = mimeType,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        )
+        val json = postMultipartJson("sendPhoto", body)
+        return parseMessage(requireResultObject(parseApiResponse(json), "sendPhoto"))
+    }
+
+    suspend fun sendVideo(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): MessageDto {
+        val body = buildMultipartMediaBody(
+            fieldName = "video",
+            chatId = chatId,
+            file = file,
+            mimeType = mimeType,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        )
+        val json = postMultipartJson("sendVideo", body)
+        return parseMessage(requireResultObject(parseApiResponse(json), "sendVideo"))
+    }
+
+    suspend fun sendMediaGroup(
+        chatId: Long,
+        media: List<OutgoingVisualMedia>,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): List<MessageDto> {
+        val body = buildMediaGroupBody(
+            chatId = chatId,
+            media = media,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        )
+        val json = postMultipartJson("sendMediaGroup", body)
+        return parseMessages(requireResultArray(parseApiResponse(json), "sendMediaGroup"))
     }
 
     suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean {
@@ -221,6 +279,97 @@ class TelegramBotApiClient(
         }
     }
 
+    private suspend fun postMultipartJson(
+        method: String,
+        body: MultipartBody
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(baseUrl + method)
+            .post(body)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string()
+                ?: throw TelegramApiException("Empty response body for $method")
+            val json = parseJsonBody(responseBody, method)
+
+            if (!response.isSuccessful) {
+                throwTelegramApiException(
+                    statusCode = response.code,
+                    path = method,
+                    json = json
+                )
+            }
+
+            json
+        }
+    }
+
+    private fun buildMultipartMediaBody(
+        fieldName: String,
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String?,
+        replyToMessageId: Long?
+    ): MultipartBody {
+        return MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("chat_id", chatId.toString())
+            .apply {
+                caption?.takeIf { it.isNotBlank() }?.let { addFormDataPart("caption", it) }
+                replyToMessageId?.let { addFormDataPart("reply_to_message_id", it.toString()) }
+                addFormDataPart(
+                    fieldName,
+                    file.name,
+                    file.asRequestBody(mimeType.toMediaTypeOrNull())
+                )
+            }
+            .build()
+    }
+
+    private fun buildMediaGroupBody(
+        chatId: Long,
+        media: List<OutgoingVisualMedia>,
+        caption: String?,
+        replyToMessageId: Long?
+    ): MultipartBody {
+        val bodyBuilder = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("chat_id", chatId.toString())
+        val mediaJson = JSONArray()
+
+        replyToMessageId?.let {
+            bodyBuilder.addFormDataPart("reply_to_message_id", it.toString())
+        }
+
+        media.forEachIndexed { index, item ->
+            val attachName = "media$index"
+            val type = when {
+                item.mimeType.startsWith("image/") -> "photo"
+                item.mimeType.startsWith("video/") -> "video"
+                else -> throw TelegramApiException("Unsupported media type for sendMediaGroup: ${item.mimeType}")
+            }
+            val mediaItem = JSONObject()
+                .put("type", type)
+                .put("media", "attach://$attachName")
+
+            if (index == 0 && !caption.isNullOrBlank()) {
+                mediaItem.put("caption", caption)
+            }
+
+            mediaJson.put(mediaItem)
+            bodyBuilder.addFormDataPart(
+                attachName,
+                item.file.name,
+                item.file.asRequestBody(item.mimeType.toMediaTypeOrNull())
+            )
+        }
+
+        bodyBuilder.addFormDataPart("media", mediaJson.toString())
+        return bodyBuilder.build()
+    }
+
     private fun buildMethodUrl(method: String, queryParams: Map<String, String>): okhttp3.HttpUrl {
         val urlBuilder = (baseUrl + method).toHttpUrl().newBuilder()
         queryParams.forEach { (key, value) ->
@@ -307,6 +456,12 @@ class TelegramBotApiClient(
             message = json.optJSONObject("message")?.let { parseMessage(it) },
             editedMessage = json.optJSONObject("edited_message")?.let { parseMessage(it) }
         )
+    }
+
+    private fun parseMessages(json: JSONArray): List<MessageDto> {
+        return List(json.length()) { index ->
+            parseMessage(json.getJSONObject(index))
+        }
     }
 
     private fun parseMessage(json: JSONObject, includeReply: Boolean = true): MessageDto {

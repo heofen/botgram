@@ -3,6 +3,7 @@ package com.heofen.botgram.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,12 +19,14 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +55,7 @@ import com.heofen.botgram.R
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
+import com.heofen.botgram.ui.screens.group.ComposerMediaItem
 import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.ui.theme.botgramHazeStyle
 import com.heofen.botgram.utils.extensions.getInitials
@@ -97,8 +101,11 @@ fun MessageInput(
     hazeState: HazeState,
     replyMessage: Message? = null,
     replySender: User? = null,
+    pendingMedia: List<ComposerMediaItem> = emptyList(),
     onTextChange: (String) -> Unit,
+    onAttachClick: () -> Unit = {},
     onSendClick: () -> Unit,
+    onRemovePendingMedia: (String) -> Unit = {},
     onCancelReply: () -> Unit = {}
 ) {
     val islandStyle = botgramHazeStyle()
@@ -127,6 +134,14 @@ fun MessageInput(
                     onCancelReply = onCancelReply
                 )
                 Spacer(modifier = Modifier.height(6.dp))
+            }
+
+            if (pendingMedia.isNotEmpty()) {
+                PendingMediaStrip(
+                    items = pendingMedia,
+                    onRemove = onRemovePendingMedia
+                )
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             Row(
@@ -163,8 +178,23 @@ fun MessageInput(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 IconButton(
+                    onClick = onAttachClick,
+                    colors = IconButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledContainerColor = Color.Transparent,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AttachFile,
+                        contentDescription = stringResource(R.string.action_attach_media)
+                    )
+                }
+
+                IconButton(
                     onClick = onSendClick,
-                    enabled = text.isNotBlank(),
+                    enabled = text.isNotBlank() || pendingMedia.isNotEmpty(),
                     colors = IconButtonColors(
                         containerColor = Color.Transparent,
                         contentColor = MaterialTheme.colorScheme.primary,
@@ -178,6 +208,84 @@ fun MessageInput(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PendingMediaStrip(
+    items: List<ComposerMediaItem>,
+    onRemove: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items.forEach { item ->
+            PendingMediaPreview(
+                item = item,
+                onRemove = { onRemove(item.localPath) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PendingMediaPreview(
+    item: ComposerMediaItem,
+    onRemove: () -> Unit
+) {
+    val file = remember(item.localPath) { File(item.localPath) }
+
+    Box(
+        modifier = Modifier
+            .size(72.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.34f))
+    ) {
+        AsyncImage(
+            model = file,
+            contentDescription = item.fileName,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        if (item.mimeType.startsWith("video/")) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = "Video",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(24.dp),
+            colors = IconButtonColors(
+                containerColor = Color.Black.copy(alpha = 0.45f),
+                contentColor = Color.White,
+                disabledContainerColor = Color.Black.copy(alpha = 0.25f),
+                disabledContentColor = Color.White.copy(alpha = 0.38f)
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.action_remove_media),
+                modifier = Modifier.size(14.dp)
+            )
         }
     }
 }
@@ -366,8 +474,11 @@ private fun MessageInputPreview() {
         MessageInput(
             text = "",
             hazeState = hazeState,
+            pendingMedia = emptyList(),
             onTextChange = {},
-            onSendClick = {}
+            onAttachClick = {},
+            onSendClick = {},
+            onRemovePendingMedia = {}
         )
     }
 }

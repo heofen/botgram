@@ -1,5 +1,12 @@
 package com.heofen.botgram.data.remote
 
+import java.io.File
+
+data class OutgoingVisualMedia(
+    val file: File,
+    val mimeType: String
+)
+
 data class AvatarDownloadResult(
     val fileId: String?,
     val fileUniqueId: String?,
@@ -14,6 +21,29 @@ interface TelegramGateway {
         text: String,
         replyToMessageId: Long? = null
     ): TelegramIncomingMessage
+
+    suspend fun sendPhotoMessage(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): TelegramIncomingMessage
+
+    suspend fun sendVideoMessage(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): TelegramIncomingMessage
+
+    suspend fun sendVisualMediaGroup(
+        chatId: Long,
+        media: List<OutgoingVisualMedia>,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): List<TelegramIncomingMessage>
 
     suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean
 
