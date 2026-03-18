@@ -3,6 +3,7 @@ package com.heofen.botgram.database.tables
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+/** Сущность пользователя Telegram, сохранённая локально. */
 @Entity(tableName = "users")
 data class User(
     @PrimaryKey

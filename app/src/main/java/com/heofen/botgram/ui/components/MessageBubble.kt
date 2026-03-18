@@ -60,6 +60,7 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.max
 
+/** Положение пузыря сообщения внутри визуального кластера соседних сообщений. */
 enum class MsgBubbleClusterPosition {
     Single,
     Top,
@@ -67,6 +68,7 @@ enum class MsgBubbleClusterPosition {
     Bottom
 }
 
+/** Разделитель по дате между сообщениями разных календарных дней. */
 @Composable
 fun MessageDateDivider(timestamp: Long) {
     val day = remember(timestamp) {
@@ -109,6 +111,7 @@ fun MessageDateDivider(timestamp: Long) {
     }
 }
 
+/** Универсальный пузырь сообщения с поддержкой reply, медиа и метаданных. */
 @Composable
 fun MsgBubble(
     msg: Message,
@@ -239,6 +242,7 @@ fun MsgBubble(
     }
 }
 
+/** Небольшой бейдж с именем отправителя для групповых чатов. */
 @Composable
 private fun SenderNameBadge(sender: User?) {
     Spacer(modifier = Modifier.height(6.dp))
@@ -260,6 +264,7 @@ private fun SenderNameBadge(sender: User?) {
     Spacer(modifier = Modifier.height(4.dp))
 }
 
+/** Собирает содержимое пузыря: reply, основной контент и метаданные. */
 @Composable
 private fun MessageBubbleContent(
     msg: Message,
@@ -316,6 +321,7 @@ private fun MessageBubbleContent(
     }
 }
 
+/** Раскладывает reply-превью и тело сообщения в один пузырь фиксированной ширины. */
 @Composable
 private fun ReplyAwareBubbleLayout(
     reply: @Composable () -> Unit,
@@ -348,6 +354,7 @@ private fun ReplyAwareBubbleLayout(
     }
 }
 
+/** Выбирает визуальное представление сообщения по его типу. */
 @Composable
 private fun BubbleBodyContent(
     msg: Message,
@@ -477,6 +484,7 @@ private fun BubbleBodyContent(
     }
 }
 
+/** Строка времени и статуса доставки под сообщением. */
 @Composable
 private fun MessageMetaRow(
     msg: Message,
@@ -492,6 +500,7 @@ private fun MessageMetaRow(
     }
 }
 
+/** Рисует текст сообщения и пытается встроить метаданные в последнюю строку. */
 @Composable
 private fun MessageTextWithAdaptiveMeta(
     text: String,
@@ -640,11 +649,13 @@ private fun MessageTextWithAdaptiveMeta(
     }
 }
 
+/** Собирает подпись времени и признака редактирования. */
 private fun buildMessageMetaLabel(msg: Message): String {
     val formattedDate = formatMessageTime(msg.timestamp)
     return if (msg.isEdited) "edited $formattedDate" else formattedDate
 }
 
+/** Отрисовывает компактный блок времени и статуса отправки. */
 @Composable
 private fun MessageMetaContent(
     msg: Message,
@@ -677,6 +688,7 @@ private fun MessageMetaContent(
     }
 }
 
+/** Бейдж метаданных поверх визуального медиа. */
 @Composable
 internal fun MediaMetaBadge(
     msg: Message,
@@ -709,6 +721,7 @@ internal fun MediaMetaBadge(
     }
 }
 
+/** Превью сообщения, на которое сделан ответ. */
 @Composable
 private fun ReplyPreview(
     replyMessage: Message?,
@@ -771,6 +784,7 @@ private fun ReplyPreview(
     }
 }
 
+/** Вычисляет форму пузыря в зависимости от направления и позиции в кластере. */
 private fun msgBubbleShape(
     isOutgoing: Boolean,
     position: MsgBubbleClusterPosition,
@@ -795,6 +809,7 @@ private fun msgBubbleShape(
     }
 }
 
+/** Подбирает форму вложенного медиа с учётом текста сверху и снизу. */
 private fun mediaContentShape(
     hasContentAbove: Boolean,
     hasContentBelow: Boolean
@@ -809,39 +824,46 @@ private fun mediaContentShape(
     )
 }
 
+/** Определяет, нужно ли рисовать отдельный хромированный пузырь для типа сообщения. */
 private fun MessageType.isDetachedBubble(): Boolean =
     this == MessageType.STICKER ||
         this == MessageType.ANIMATED_STICKER ||
         this == MessageType.VIDEO_STICKER ||
         this == MessageType.VIDEO_NOTE
 
+/** Определяет, относится ли сообщение к стикерам. */
 private fun MessageType.isStickerType(): Boolean =
     this == MessageType.STICKER ||
         this == MessageType.ANIMATED_STICKER ||
         this == MessageType.VIDEO_STICKER
 
+/** Определяет, использует ли сообщение медиа-пузырь расширенного формата. */
 private fun MessageType.isRichMediaBubble(): Boolean =
     this == MessageType.PHOTO ||
         this == MessageType.VIDEO ||
         this == MessageType.ANIMATION ||
         this == MessageType.LOCATION
 
+/** Определяет, относится ли сообщение к визуальным медиа для overlay-метаданных. */
 private fun MessageType.isVisualMediaBubble(): Boolean =
     this == MessageType.PHOTO ||
         this == MessageType.VIDEO ||
         this == MessageType.ANIMATION
 
+/** Форматирует время сообщения для UI. */
 private fun formatMessageTime(timestamp: Long): String {
     val instant = Instant.ofEpochMilli(timestamp)
     val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
     return dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
 }
 
+/** Возвращает отображаемое имя пользователя с fallback-значением. */
 fun User?.displayName(defaultName: String = "Unknown"): String =
     listOfNotNull(this?.firstName, this?.lastName)
         .joinToString(" ")
         .ifBlank { defaultName }
 
+/** Возвращает короткий текст для превью сообщения в блоке ответа. */
 fun Message?.replyPreviewText(): String =
     when (this?.type) {
         null -> "Original message"

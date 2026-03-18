@@ -14,6 +14,7 @@ import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
 
+/** Основная Room-база приложения. */
 @Database(
     entities = [Message::class, Chat::class, User::class],
     version = 2,
@@ -21,11 +22,15 @@ import com.heofen.botgram.database.tables.User
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
+    /** DAO сообщений. */
     abstract fun messageDao(): MessageDao
+    /** DAO чатов. */
     abstract fun chatDao(): ChatDao
+    /** DAO пользователей. */
     abstract fun userDao(): UserDao
 
     companion object {
+        /** Миграция, добавляющая координаты в сущность сообщения. */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN latitude REAL")
@@ -36,6 +41,7 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        /** Возвращает singleton-экземпляр Room-базы. */
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(

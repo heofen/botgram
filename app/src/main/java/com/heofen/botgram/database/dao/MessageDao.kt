@@ -7,14 +7,18 @@ import androidx.room.Query
 import com.heofen.botgram.database.tables.Message
 import kotlinx.coroutines.flow.Flow
 
+/** DAO для истории сообщений и локально скачанных вложений. */
 @Dao
 interface MessageDao {
+    /** Возвращает поток сообщений чата в хронологическом порядке. */
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp ASC")
     fun getChatMessages(chatId: Long): Flow<List<Message>>
 
+    /** Возвращает сообщения из одного media group. */
     @Query("SELECT * FROM messages WHERE mediaGroupId = :groupId ORDER BY messageId ASC")
     fun getMediaGroup(groupId: String): Flow<List<Message>>
 
+    /** Ищет конкретное сообщение по составному ключу. */
     @Query("SELECT * FROM messages WHERE chatId = :chatId AND messageId = :messageId")
     suspend fun getMessage(chatId: Long, messageId: Long): Message?
 
@@ -59,6 +63,7 @@ interface MessageDao {
     @Query("SELECT EXISTS(SELECT * FROM messages WHERE fileUniqueId = :fileUniqueId)")
     suspend fun fileExists(fileUniqueId: String): Boolean
 
+    /** Помечает сообщение как прочитанное. */
     @Query("UPDATE messages SET readStatus = 1 WHERE chatId = :chatId AND messageId = :msgId")
     suspend fun readMessage(chatId: Long, msgId: Long)
 }

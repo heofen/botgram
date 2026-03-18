@@ -1,9 +1,9 @@
 package com.heofen.botgram.database.tables
 
-import androidx.annotation.RequiresExtension
 import androidx.room.Entity
 import com.heofen.botgram.MessageType
 
+/** Сущность сообщения в локальной базе данных. */
 @Entity(
     tableName = "messages",
     primaryKeys = ["chatId", "messageId"]

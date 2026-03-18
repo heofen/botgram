@@ -18,6 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 
+/**
+ * Корневая `Activity`, которая выбирает между экраном логина и основной навигацией.
+ */
 class MainActivity : ComponentActivity() {
     private val sessionManager: SessionManager by inject()
     private val tokenManager: TokenManager by inject()
@@ -35,6 +38,7 @@ class MainActivity : ComponentActivity() {
                     onCheckToken = { inputToken ->
                         withContext(Dispatchers.IO) {
                             try {
+                                // Проверяем токен через Telegram API до сохранения.
                                 val isValid = tokenValidator.validate(inputToken)
                                 if (isValid) {
                                     tokenManager.saveToken(inputToken)
@@ -71,6 +75,7 @@ class MainActivity : ComponentActivity() {
         startActivity(restartIntent)
     }
 
+    /** Очищает токен и session-scoped зависимости, затем перезапускает приложение. */
     private fun logOut() {
         tokenManager.clearToken()
         sessionManager.clearSession()
@@ -78,6 +83,7 @@ class MainActivity : ComponentActivity() {
         restartApp()
     }
 
+    /** Запускает foreground-сервис, отвечающий за long polling Telegram API. */
     private fun startUpdateService() {
         val intent = Intent(this, GetUpdates::class.java)
         ContextCompat.startForegroundService(this, intent)

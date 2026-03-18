@@ -9,12 +9,15 @@ import com.heofen.botgram.database.tables.ChatListItem
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 
+/** Репозиторий чатов и списка диалогов. */
 class ChatRepository(
     private val chatDao: ChatDao,
     private val mediaManager: MediaManager
 ) : ChatSyncStore {
+    /** Возвращает поток списка чатов для главного экрана. */
     fun getAllChats(): Flow<List<ChatListItem>> = chatDao.getAllChatListItems()
 
+    /** Наблюдает за изменениями конкретного чата. */
     fun observeById(id: Long): Flow<Chat?> = chatDao.observeById(id)
 
     suspend fun getById(id: Long): Chat? = chatDao.getById(id)
@@ -35,6 +38,7 @@ class ChatRepository(
         localPath: String?,
     ) = chatDao.updateAvatar(chatId, fileId, fileUniqueId, localPath)
 
+    /** Докачивает аватар чата, если он ещё не сохранён локально. */
     suspend fun loadAvatarIfMissing(chatId: Long) {
         val chat = chatDao.getById(chatId) ?: return
 
@@ -49,8 +53,10 @@ class ChatRepository(
         }
     }
 
+    /** Ищет чаты по названию и имени собеседника. */
     fun searchChats(query: String): Flow<List<ChatListItem>> = chatDao.searchChatListItems(query)
 
+    /** Сохраняет локально ценные поля, если сервер прислал неполную версию чата. */
     private suspend fun Chat.mergeStoredState(): Chat {
         val current = chatDao.getById(id) ?: return this
         return copy(

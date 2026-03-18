@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** ViewModel списка чатов: поиск, подгрузка аватаров и поток элементов списка. */
 class ChatListViewModel(
     private val chatRepository: ChatRepository
 ) : ViewModel() {
@@ -44,6 +45,7 @@ class ChatListViewModel(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             chatListState.collectLatest { chats ->
+                // Ленивая догрузка аватаров только для первых видимых/актуальных элементов списка.
                 chats.take(20).forEach { chat ->
                     if (avatarLoadRequested.add(chat.chat.id)) {
                         chatRepository.loadAvatarIfMissing(chat.chat.id)

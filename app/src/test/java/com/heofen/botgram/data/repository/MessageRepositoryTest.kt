@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+/** Тесты объединения удалённого сообщения с локальным состоянием. */
 class MessageRepositoryTest {
     @Test
     fun mergeRemoteMessageWithLocalState_preservesLocalFlagsAndFilePathForSameMedia() {
@@ -59,6 +60,7 @@ class MessageRepositoryTest {
         assertNull(merged.fileLocalPath)
     }
 
+    /** Создаёт минимальную тестовую сущность сообщения. */
     private fun baseMessage(
         text: String? = "hello",
         fileId: String? = null,

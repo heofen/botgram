@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
+/** Исключение сетевого слоя Telegram с HTTP- и API-метаданными. */
 class TelegramApiException(
     message: String,
     val statusCode: Int? = null,
@@ -29,6 +30,11 @@ class TelegramApiException(
     val description: String? = null
 ) : Exception(message)
 
+/**
+ * Низкоуровневый клиент Telegram Bot API.
+ *
+ * Отвечает за HTTP-запросы, разбор JSON и преобразование ответов в DTO.
+ */
 class TelegramBotApiClient(
     private val token: String,
     private val client: OkHttpClient = OkHttpClient()
@@ -41,6 +47,7 @@ class TelegramBotApiClient(
     private val baseUrl = "https://api.telegram.org/bot$token/"
     private val fileBaseUrl = "https://api.telegram.org/file/bot$token/"
 
+    /** Выполняет long polling запрос `getUpdates`. */
     suspend fun getUpdates(offset: Long?, timeout: Int): List<UpdateDto> {
         val bodyBuilder = FormBody.Builder()
             .add("timeout", timeout.toString())
@@ -53,6 +60,7 @@ class TelegramBotApiClient(
         return parseUpdates(requireResultArray(parseApiResponse(json), "getUpdates"))
     }
 
+    /** Отправляет обычное текстовое сообщение. */
     suspend fun sendMessage(
         chatId: Long,
         text: String,
@@ -72,6 +80,7 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendMessage"))
     }
 
+    /** Отправляет геолокацию. */
     suspend fun sendLocation(
         chatId: Long,
         latitude: Double,
@@ -91,6 +100,7 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendLocation"))
     }
 
+    /** Отправляет фотографию multipart-запросом. */
     suspend fun sendPhoto(
         chatId: Long,
         file: File,
@@ -110,6 +120,7 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendPhoto"))
     }
 
+    /** Отправляет видео multipart-запросом. */
     suspend fun sendVideo(
         chatId: Long,
         file: File,
@@ -129,6 +140,7 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendVideo"))
     }
 
+    /** Отправляет альбом из фото и/или видео. */
     suspend fun sendMediaGroup(
         chatId: Long,
         media: List<OutgoingVisualMedia>,
@@ -145,6 +157,7 @@ class TelegramBotApiClient(
         return parseMessages(requireResultArray(parseApiResponse(json), "sendMediaGroup"))
     }
 
+    /** Удаляет сообщение через Telegram API. */
     suspend fun deleteMessage(chatId: Long, messageId: Long): Boolean {
         val body = FormBody.Builder()
             .add("chat_id", chatId.toString())
@@ -155,12 +168,14 @@ class TelegramBotApiClient(
         return requireResultBoolean(parseApiResponse(json), "deleteMessage")
     }
 
+    /** Возвращает сведения о текущем боте для проверки токена. */
     suspend fun getMe(): UserDto {
         val httpUrl = buildMethodUrl(method = "getMe", queryParams = emptyMap())
         val json = getJson(httpUrl)
         return parseUser(requireResultObject(parseApiResponse(json), "getMe"))
     }
 
+    /** Получает метаданные файла по `fileId`. */
     suspend fun getFile(fileId: String): TelegramFileDto {
         val httpUrl = buildMethodUrl(
             method = "getFile",
@@ -170,6 +185,7 @@ class TelegramBotApiClient(
         return parseTelegramFile(requireResultObject(parseApiResponse(json), "getFile"))
     }
 
+    /** Получает аватары пользователя. */
     suspend fun getUserProfilePhotos(userId: Long, limit: Int): UserProfilePhotosDto {
         val httpUrl = buildMethodUrl(
             method = "getUserProfilePhotos",
@@ -182,6 +198,7 @@ class TelegramBotApiClient(
         return parseUserProfilePhotos(requireResultObject(parseApiResponse(json), "getUserProfilePhotos"))
     }
 
+    /** Получает сведения о чате. */
     suspend fun getChat(chatId: Long): ChatDto {
         val httpUrl = buildMethodUrl(
             method = "getChat",
@@ -191,6 +208,7 @@ class TelegramBotApiClient(
         return parseChat(requireResultObject(parseApiResponse(json), "getChat"))
     }
 
+    /** Скачивает файл Telegram по `file_path` в локальный файл. */
     suspend fun downloadFile(filePath: String, destination: File): Boolean = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(fileBaseUrl + filePath)
@@ -212,6 +230,7 @@ class TelegramBotApiClient(
         }
     }
 
+    /** Асинхронно освобождает ресурсы `OkHttpClient`. */
     fun close() {
         if (!isClosed.compareAndSet(false, true)) return
 
@@ -228,6 +247,7 @@ class TelegramBotApiClient(
         }
     }
 
+    /** Корректно завершает dispatcher, pool и cache у всех переданных клиентов. */
     private fun shutdownResources(vararg clients: OkHttpClient) {
         val dispatchers = linkedSetOf<Dispatcher>()
         val pools = linkedSetOf<ConnectionPool>()
@@ -247,6 +267,7 @@ class TelegramBotApiClient(
         caches.forEach(Cache::close)
     }
 
+    /** Выполняет GET-запрос и парсит тело как JSON-объект. */
     private suspend fun getJson(httpUrl: okhttp3.HttpUrl): JSONObject = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(httpUrl)

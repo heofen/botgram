@@ -77,6 +77,7 @@ import com.heofen.botgram.database.tables.Message
 import java.io.File
 import java.util.Locale
 
+/** Отрисовывает фото-сообщение или fallback, если файл ещё не скачан. */
 @Composable
 fun MediaMessage(
     msg: Message,
@@ -133,6 +134,7 @@ fun MediaMessage(
     )
 }
 
+/** Отображает видеосообщение-кружок. */
 @Composable
 fun VideoNoteMessage(msg: Message) {
     val context = LocalContext.current
@@ -171,6 +173,7 @@ fun VideoNoteMessage(msg: Message) {
     }
 }
 
+/** Отображает стикер или заглушку, если файл ещё недоступен. */
 @Composable
 fun StickerMessage(msg: Message) {
     val file = msg.fileLocalPath?.let(::File)
@@ -204,6 +207,7 @@ fun StickerMessage(msg: Message) {
     }
 }
 
+/** Отображает карточку аудиофайла. */
 @Composable
 fun AudioMessage(
     msg: Message,
@@ -237,6 +241,7 @@ fun AudioMessage(
     }
 }
 
+/** Отображает голосовое сообщение в виде карточки с псевдо-волной. */
 @Composable
 fun VoiceMessage(
     msg: Message,
@@ -284,6 +289,7 @@ fun VoiceMessage(
     }
 }
 
+/** Декоративная звуковая волна для карточки голосового сообщения. */
 @Composable
 private fun VoiceWaveform(
     color: Color,
@@ -308,6 +314,7 @@ private fun VoiceWaveform(
     }
 }
 
+/** Отображает документ и открывает его внешним приложением. */
 @Composable
 fun DocumentMessage(
     msg: Message,
@@ -339,6 +346,7 @@ fun DocumentMessage(
     }
 }
 
+/** Отображает контакт как компактную карточку. */
 @Composable
 fun ContactMessage(
     msg: Message,
@@ -365,6 +373,7 @@ fun ContactMessage(
     }
 }
 
+/** Отображает сообщение с геолокацией и позволяет открыть координаты на карте. */
 @Composable
 fun LocationMessage(msg: Message) {
     val context = LocalContext.current
@@ -415,6 +424,7 @@ fun LocationMessage(msg: Message) {
     }
 }
 
+/** Открывает геолокацию во внешнем картографическом приложении или браузере. */
 private fun openLocationOnMap(context: Context, latitude: Double?, longitude: Double?) {
     if (latitude == null || longitude == null) return
 
@@ -426,6 +436,7 @@ private fun openLocationOnMap(context: Context, latitude: Double?, longitude: Do
     runCatching { context.startActivity(intent) }
 }
 
+/** Форматирует размер файла в удобочитаемый вид. */
 fun formatFileSize(size: Long?): String {
     if (size == null) return ""
     val kb = size / 1024.0
@@ -437,6 +448,7 @@ fun formatFileSize(size: Long?): String {
     }
 }
 
+/** Форматирует длительность медиа в `MM:SS`. */
 fun formatDuration(seconds: Long?): String {
     if (seconds == null) return ""
     val minutes = seconds / 60
@@ -444,6 +456,7 @@ fun formatDuration(seconds: Long?): String {
     return "%02d:%02d".format(minutes, remainingSeconds)
 }
 
+/** Отображает видео или анимацию с inline-превью, если это возможно. */
 @Composable
 fun VideoMessage(
     msg: Message,
@@ -534,6 +547,7 @@ fun VideoMessage(
     )
 }
 
+/** Проигрывает GIF-анимацию через Coil. */
 @Composable
 private fun AnimatedGifContent(file: File) {
     val context = LocalContext.current
@@ -575,6 +589,7 @@ private fun AnimatedGifContent(file: File) {
     )
 }
 
+/** Встраивает видео-плеер ExoPlayer прямо в сообщение. */
 @Composable
 private fun InlineVideoContent(
     file: File,
@@ -639,6 +654,7 @@ private fun InlineVideoContent(
     }
 }
 
+/** Проверяет, содержит ли видеоролик аудиодорожку. */
 private fun videoHasAudio(file: File): Boolean {
     val retriever = MediaMetadataRetriever()
     return runCatching {
@@ -655,6 +671,7 @@ private enum class InlinePreviewMode {
     NONE
 }
 
+/** Определяет, как лучше рендерить анимированное вложение: как GIF, видео или заглушку. */
 private fun resolveAnimatedPreviewMode(
     type: MessageType,
     file: File?
@@ -668,6 +685,7 @@ private fun resolveAnimatedPreviewMode(
     }
 }
 
+/** Вычисляет безопасное соотношение сторон для медиа-контента. */
 private fun mediaAspectRatio(
     width: Int?,
     height: Int?
@@ -681,6 +699,7 @@ private fun mediaAspectRatio(
     }
 }
 
+/** Открывает локальный файл сообщения через `FileProvider`. */
 private fun openMessageFile(
     context: Context,
     file: File?,
@@ -704,6 +723,7 @@ private fun openMessageFile(
     }
 }
 
+/** Общий контейнер для визуальных медиа-вложений с градиентом и оверлеями. */
 @Composable
 private fun MediaFrame(
     file: File?,
@@ -744,6 +764,7 @@ private fun MediaFrame(
     }
 }
 
+/** Заглушка для медиа, которое ещё не скачано или не удалось загрузить. */
 @Composable
 private fun MediaPlaceholder(
     icon: ImageVector,
@@ -768,6 +789,7 @@ private fun MediaPlaceholder(
     }
 }
 
+/** Базовая карточка для файловых вложений. */
 @Composable
 private fun AttachmentCard(
     modifier: Modifier = Modifier,
@@ -793,6 +815,7 @@ private fun AttachmentCard(
     )
 }
 
+/** Контейнер под иконку вложения. */
 @Composable
 private fun AttachmentIconBox(
     backgroundColor: Color,
@@ -811,6 +834,7 @@ private fun AttachmentIconBox(
     )
 }
 
+/** Текстовый блок карточки вложения: заголовок и подпись. */
 @Composable
 private fun AttachmentInfo(
     title: String,
@@ -835,4 +859,5 @@ private fun AttachmentInfo(
     }
 }
 
+/** Безопасно проверяет наличие файла на диске. */
 private fun File?.existsOnDisk(): Boolean = this?.exists() == true

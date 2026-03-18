@@ -6,7 +6,13 @@ import com.heofen.botgram.di.appModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
+/**
+ * Точка входа приложения.
+ *
+ * Создаёт корневой контейнер зависимостей и запускает Koin.
+ */
 class BotgramApplication : Application() {
+    /** Общий контейнер приложения с лениво создаваемыми зависимостями. */
     lateinit var appContainer: AppContainer
         private set
 

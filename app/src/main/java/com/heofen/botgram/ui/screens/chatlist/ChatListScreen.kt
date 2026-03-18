@@ -33,6 +33,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
+/** Экран списка чатов с боковым меню и строкой поиска. */
 @Composable
 fun ChatListScreen(
     viewModel: ChatListViewModel,
@@ -110,6 +111,7 @@ fun ChatListScreen(
                                 onChatClick(chat.chat.id)
                             }
                         )
+                        // Разделитель не рисуется после последнего элемента списка.
                         if (index < chats.lastIndex) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(start = 82.dp),

@@ -7,6 +7,7 @@ import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
 
+/** Преобразует сообщение Telegram в сущность Room. */
 fun TelegramIncomingMessage.toDbMessage(
     isOutgoing: Boolean = false,
     readStatus: Boolean = false
@@ -42,6 +43,7 @@ fun TelegramIncomingMessage.toDbMessage(
     )
 }
 
+/** Преобразует чат Telegram в сущность локальной базы. */
 fun TelegramChat.toDbChat(): Chat {
     return Chat(
         id = id,
@@ -60,6 +62,7 @@ fun TelegramChat.toDbChat(): Chat {
     )
 }
 
+/** Преобразует пользователя Telegram в сущность локальной базы. */
 fun TelegramUser.toDbUser(): User {
     return User(
         id = id,

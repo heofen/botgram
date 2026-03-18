@@ -6,6 +6,7 @@ import com.heofen.botgram.database.dao.UserDao
 import com.heofen.botgram.database.tables.User
 import java.io.File
 
+/** Репозиторий пользователей и их аватаров. */
 class UserRepository(
     private val userDao: UserDao,
     private val mediaManager: MediaManager
@@ -28,6 +29,7 @@ class UserRepository(
     suspend fun findCachedAvatar(fileUniqueId: String): User? =
         userDao.findByAvatarUniqueId(fileUniqueId)
 
+    /** Докачивает аватар пользователя, если локального файла ещё нет. */
     suspend fun loadAvatarIfMissing(userId: Long) {
         val user = userDao.getById(userId) ?: return
 
@@ -43,6 +45,7 @@ class UserRepository(
         }
     }
 
+    /** Сохраняет уже известный локальный аватар при повторном upsert пользователя. */
     private suspend fun User.mergeStoredAvatar(): User {
         val current = userDao.getById(id) ?: return this
         return copy(

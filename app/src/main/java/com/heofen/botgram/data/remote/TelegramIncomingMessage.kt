@@ -3,6 +3,7 @@ package com.heofen.botgram.data.remote
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 
+/** Нормализованная модель сообщения, независимая от сырых DTO Telegram API. */
 data class TelegramIncomingMessage(
     val messageId: Long,
     val chatId: Long,
@@ -32,6 +33,7 @@ data class TelegramIncomingMessage(
     val sender: TelegramUser?
 )
 
+/** Нормализованная модель чата, полученная из Telegram API. */
 data class TelegramChat(
     val id: Long,
     val type: ChatType,
@@ -45,6 +47,7 @@ data class TelegramChat(
     val lastMessageSenderId: Long?
 )
 
+/** Нормализованная модель пользователя Telegram. */
 data class TelegramUser(
     val id: Long,
     val firstName: String,

@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 
+/** Конвертеры Room для enum-типов приложения. */
 class Converters {
     @TypeConverter
     fun fromChatType(value: ChatType): String = value.name

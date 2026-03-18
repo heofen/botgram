@@ -14,12 +14,14 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
 
+/** Репозиторий сообщений: отправка, удаление, кеширование файлов и синхронизация. */
 class MessageRepository(
     private val messageDao: MessageDao,
     private val gateway: TelegramGateway,
     private val mediaManager: MediaManager
 ) : MessageSyncStore {
 
+    /** Ограничивает число одновременных скачиваний медиа, чтобы не перегружать сеть и диск. */
     private val downloadSemaphore = Semaphore(permits = 3)
 
     fun getChatMessages(chatId: Long): Flow<List<Message>> =
@@ -60,6 +62,7 @@ class MessageRepository(
         isOutgoing: Boolean,
         readStatus: Boolean
     ): Message {
+        // При повторной синхронизации сохраняем локально важные поля вроде пути к файлу.
         val existing = getMessage(message.chatId, message.messageId)
         val incoming = message.toDbMessage(
             isOutgoing = existing?.isOutgoing ?: isOutgoing,
@@ -236,6 +239,7 @@ class MessageRepository(
             if (File(path).exists()) return
         }
 
+        // Повторно используем уже скачанный файл по `fileUniqueId`, если он есть в кеше другого сообщения.
         val cached = findCachedMedia(fileUniqueId)
         cached?.fileLocalPath?.let { cachedPath ->
             if (File(cachedPath).exists()) {
@@ -262,6 +266,7 @@ class MessageRepository(
     }
 }
 
+/** Сливает свежую серверную версию сообщения с уже существующим локальным состоянием. */
 internal fun mergeRemoteMessageWithLocalState(
     incoming: Message,
     existing: Message?

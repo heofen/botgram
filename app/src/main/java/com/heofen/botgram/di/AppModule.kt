@@ -15,6 +15,7 @@ import com.heofen.botgram.ui.screens.group.GroupViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
+/** Фабрики concrete-реализаций зависимостей приложения. */
 object AppModule {
     fun provideDatabase(context: Context): AppDatabase =
         AppDatabase.getDatabase(context)
@@ -48,6 +49,7 @@ object AppModule {
     ): UserRepository = UserRepository(database.userDao(), mediaManager)
 }
 
+/** Koin-модуль, публикующий root- и session-scoped зависимости. */
 fun appModule(appContainer: AppContainer) = module {
     single { appContainer }
     single { SessionManager(get()) }

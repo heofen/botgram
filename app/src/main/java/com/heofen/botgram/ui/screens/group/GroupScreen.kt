@@ -95,6 +95,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
+/** Экран переписки: история сообщений, поле ввода и действия над сообщениями. */
 @Composable
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -209,6 +210,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                     val showSenderName = !isPersonalChat && !message.isOutgoing && !isGroupedWithOlder
                     val itemSpacing = if (isGroupedWithNewer) 2.dp else 12.dp
 
+                    // Свайп по пузырю вправо выбирает сообщение для ответа.
                     MsgBubble(
                         msg = message,
                         sender = foundSender,
@@ -314,6 +316,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     }
 }
 
+/** Проверяет, выданы ли приложению какие-либо разрешения на определение местоположения. */
 private fun Context.hasAnyLocationPermission(): Boolean {
     return ContextCompat.checkSelfPermission(
         this,
@@ -324,10 +327,12 @@ private fun Context.hasAnyLocationPermission(): Boolean {
     ) == PackageManager.PERMISSION_GRANTED
 }
 
+/** Показывает короткий toast с результатом работы геолокации. */
 private fun Context.showLocationToast(messageResId: Int) {
     Toast.makeText(this, getString(messageResId), Toast.LENGTH_SHORT).show()
 }
 
+/** Разрешает геолокацию, отправляет координаты и сообщает пользователю результат. */
 private suspend fun Context.sendCurrentLocationOrNotify(viewModel: GroupViewModel) {
     val location = resolveCurrentLocation()
     if (location == null) {
@@ -352,6 +357,7 @@ private suspend fun Context.sendCurrentLocationOrNotify(viewModel: GroupViewMode
     }
 }
 
+/** Пытается получить наиболее актуальную геолокацию пользователя. */
 @SuppressLint("MissingPermission")
 private suspend fun Context.resolveCurrentLocation(): Location? {
     val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
@@ -385,6 +391,7 @@ private suspend fun Context.resolveCurrentLocation(): Location? {
     return null
 }
 
+/** Совместимый способ получить текущее местоположение через `LocationManagerCompat`. */
 @SuppressLint("MissingPermission")
 private suspend fun LocationManager.awaitCurrentLocationCompat(
     provider: String,
@@ -411,12 +418,14 @@ private suspend fun LocationManager.awaitCurrentLocationCompat(
     }
 }
 
+/** Локальная модель подготовленного файла для отправки фото или видео. */
 private data class PreparedVisualMedia(
     val localPath: String,
     val mimeType: String,
     val fileName: String
 )
 
+/** Копирует выбранный медиафайл во внутренний cache, чтобы безопасно отправить его позже. */
 private fun prepareVisualMediaForUpload(
     contentResolver: ContentResolver,
     cacheDir: File,
@@ -449,6 +458,7 @@ private fun prepareVisualMediaForUpload(
     )
 }
 
+/** Возвращает отображаемое имя файла для выбранного URI. */
 private fun ContentResolver.queryDisplayName(uri: Uri): String? {
     return query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         if (!cursor.moveToFirst()) return@use null
@@ -456,12 +466,14 @@ private fun ContentResolver.queryDisplayName(uri: Uri): String? {
     }
 }
 
+/** Безопасно читает строковое значение колонки курсора. */
 private fun Cursor.getStringOrNull(columnName: String): String? {
     val index = getColumnIndex(columnName)
     if (index == -1 || isNull(index)) return null
     return getString(index)
 }
 
+/** Добавляет модификатор свайпа вправо для выбора ответа на сообщение. */
 @Composable
 private fun replySwipeModifier(onReply: () -> Unit): Modifier {
     val density = LocalDensity.current
@@ -499,6 +511,7 @@ private fun replySwipeModifier(onReply: () -> Unit): Modifier {
         }
 }
 
+/** Нижняя шторка с действиями над выбранным сообщением. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageActionsSheet(
@@ -525,6 +538,7 @@ private fun MessageActionsSheet(
     }
 }
 
+/** Диалог удаления сообщения с выбором локального или серверного удаления. */
 @Composable
 private fun DeleteMessageDialog(
     onDismissRequest: () -> Unit,
@@ -616,6 +630,7 @@ private fun DeleteMessageDialog(
 
 private const val MESSAGE_CLUSTER_WINDOW_MS = 5 * 60 * 1000L
 
+/** Решает, нужно ли визуально склеить соседние сообщения в один кластер. */
 private fun shouldClusterMessages(current: Message, neighbour: Message): Boolean {
     if (current.isOutgoing != neighbour.isOutgoing) return false
     if (current.senderId != neighbour.senderId) return false
@@ -624,9 +639,11 @@ private fun shouldClusterMessages(current: Message, neighbour: Message): Boolean
     return abs(current.timestamp - neighbour.timestamp) <= MESSAGE_CLUSTER_WINDOW_MS
 }
 
+/** Проверяет, принадлежат ли два сообщения одному календарному дню. */
 private fun isSameCalendarDay(first: Message, second: Message): Boolean =
     messageDay(first.timestamp) == messageDay(second.timestamp)
 
+/** Возвращает локальную дату для timestamp сообщения. */
 private fun messageDay(timestamp: Long): LocalDate =
     Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
 

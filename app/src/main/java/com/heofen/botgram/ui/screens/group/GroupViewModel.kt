@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** Состояние экрана переписки. */
 data class GroupUiState(
     val chat: Chat? = null,
     val messages: List<Message> = emptyList(),
@@ -31,12 +32,14 @@ data class GroupUiState(
     val pendingMedia: List<ComposerMediaItem> = emptyList()
 )
 
+/** Медиафайл, выбранный пользователем перед отправкой. */
 data class ComposerMediaItem(
     val localPath: String,
     val mimeType: String,
     val fileName: String
 )
 
+/** ViewModel экрана переписки: загрузка истории, отправка сообщений и удаление. */
 class GroupViewModel(
     private val chatId: Long,
     private val chatRepository: ChatRepository,
@@ -54,6 +57,7 @@ class GroupViewModel(
         observeGroupData()
     }
 
+    /** Обновляет текст в поле ввода сообщения. */
     fun onMessageChange(text: String) {
         _uiState.update { it.copy(messageText = text) }
     }
@@ -76,6 +80,7 @@ class GroupViewModel(
         viewModelScope.launch {
             try {
                 if (pendingMedia.isNotEmpty()) {
+                    // При наличии нескольких вложений репозиторий сам выберет отправку альбомом.
                     val sentMessages = messageRepository.sendVisualMediaMessages(
                         chatId = chatId,
                         media = pendingMedia.map {
@@ -169,6 +174,7 @@ class GroupViewModel(
     fun addPendingMedia(items: List<ComposerMediaItem>) {
         if (items.isEmpty()) return
         _uiState.update { state ->
+            // Исключаем дубликаты по локальному пути файла.
             val existing = state.pendingMedia.mapTo(mutableSetOf()) { it.localPath }
             state.copy(
                 pendingMedia = state.pendingMedia + items.filter { existing.add(it.localPath) }
@@ -213,6 +219,7 @@ class GroupViewModel(
         }
     }
 
+    /** Подписывается на чат, сообщения, пользователей и ленивую загрузку медиа. */
     private fun observeGroupData() {
         viewModelScope.launch {
             launch {
@@ -251,6 +258,7 @@ class GroupViewModel(
                     }
 
                     withContext(Dispatchers.IO) {
+                        // Медиа и аватары догружаются в фоне, чтобы не задерживать первичную отрисовку.
                         messages.forEach { message ->
                             val key = message.chatId to message.messageId
                             if (mediaLoadRequested.add(key)) {
@@ -268,6 +276,7 @@ class GroupViewModel(
         }
     }
 
+    /** Пересчитывает summary последнего сообщения после удаления из истории. */
     private suspend fun refreshLastMessage() {
         val lastMessage = messageRepository.getLastMessage(chatId)
         chatRepository.updateLastMessage(

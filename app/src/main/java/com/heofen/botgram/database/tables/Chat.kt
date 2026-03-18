@@ -5,6 +5,7 @@ import androidx.room.PrimaryKey
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 
+/** Сущность чата в локальной базе Room. */
 @Entity(tableName = "chats")
 data class Chat(
     @PrimaryKey
@@ -26,5 +27,3 @@ data class Chat(
     val avatarFileUniqueId: String?,
     val avatarLocalPath: String?,
 )
-
-// TODO("для lastMessage добавить sender id")

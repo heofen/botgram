@@ -16,6 +16,7 @@ import kotlinx.coroutines.isActive
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
+/** HTTP-реализация `TelegramGateway`, основанная на `TelegramBotApiClient`. */
 class HttpTelegramGateway(
     private val context: Context,
     token: String
@@ -24,6 +25,7 @@ class HttpTelegramGateway(
     private val apiClient = TelegramBotApiClient(token = token)
     private var nextUpdateOffset: Long? = null
 
+    /** Держит long polling цикл и конвертирует DTO Telegram в доменные обновления. */
     override suspend fun collectUpdates(onUpdate: suspend (TelegramUpdate) -> Unit) {
         while (currentCoroutineContext().isActive) {
             val updates = apiClient.getUpdates(offset = nextUpdateOffset, timeout = 50)
@@ -222,6 +224,7 @@ class HttpTelegramGateway(
     }
 }
 
+/** Преобразует сырое сообщение Telegram Bot API в внутреннюю модель приложения. */
 private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {
     val sender = from
 
@@ -274,6 +277,7 @@ private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {
     )
 }
 
+/** Нормализует строковый тип чата Telegram в enum приложения. */
 private fun ChatDto.toChatType(): ChatType {
     return when (type) {
         "private" -> ChatType.PRIVATE
@@ -284,6 +288,7 @@ private fun ChatDto.toChatType(): ChatType {
     }
 }
 
+/** Определяет тип сообщения по заполненным полям DTO. */
 private fun MessageDto.determineMessageType(): MessageType {
     return when {
         text != null -> MessageType.TEXT
@@ -305,6 +310,7 @@ private fun MessageDto.determineMessageType(): MessageType {
     }
 }
 
+/** Извлекает расширение файла из доступных полей медиа-вложения. */
 private fun MessageDto.extractFileExtension(): String? {
     return when {
         document != null -> document.fileName?.substringAfterLast('.', "")
@@ -327,6 +333,7 @@ private fun MessageDto.extractFileExtension(): String? {
     }
 }
 
+/** Возвращает расширение по MIME-типу для распространённых форматов. */
 private fun getMimeTypeExtension(mimeType: String?): String {
     return when (mimeType) {
         "image/jpeg" -> "jpg"
@@ -340,6 +347,7 @@ private fun getMimeTypeExtension(mimeType: String?): String {
     }
 }
 
+/** Извлекает наиболее уместное имя файла для вложения. */
 private fun MessageDto.extractFileName(): String? {
     return when {
         document != null -> document.fileName
@@ -349,6 +357,7 @@ private fun MessageDto.extractFileName(): String? {
     }
 }
 
+/** Возвращает `fileId` миниатюры, если вложение её поддерживает. */
 private fun MessageDto.extractThumbnailFileId(): String? {
     return when {
         photo != null -> photo.minByOrNull { it.width }?.fileId
@@ -362,6 +371,7 @@ private fun MessageDto.extractThumbnailFileId(): String? {
     }
 }
 
+/** Извлекает длительность медиа-сообщения в секундах. */
 private fun MessageDto.extractMediaDuration(): Long? {
     return when {
         video != null -> video.duration
@@ -373,6 +383,7 @@ private fun MessageDto.extractMediaDuration(): Long? {
     }
 }
 
+/** Извлекает ширину медиа. */
 private fun MessageDto.extractMediaWidth(): Int? {
     return when {
         photo != null -> photo.maxByOrNull { it.width }?.width
@@ -384,6 +395,7 @@ private fun MessageDto.extractMediaWidth(): Int? {
     }
 }
 
+/** Извлекает высоту медиа. */
 private fun MessageDto.extractMediaHeight(): Int? {
     return when {
         photo != null -> photo.maxByOrNull { it.width }?.height
@@ -395,6 +407,7 @@ private fun MessageDto.extractMediaHeight(): Int? {
     }
 }
 
+/** Извлекает основной `fileId` вложения. */
 private fun MessageDto.extractFileId(): String? {
     return when {
         photo != null -> photo.maxByOrNull { it.width }?.fileId
@@ -409,6 +422,7 @@ private fun MessageDto.extractFileId(): String? {
     }
 }
 
+/** Извлекает `fileUniqueId`, используемый для кеширования. */
 private fun MessageDto.extractFileUniqueId(): String? {
     return when {
         photo != null -> photo.maxByOrNull { it.width }?.fileUniqueId
@@ -423,6 +437,7 @@ private fun MessageDto.extractFileUniqueId(): String? {
     }
 }
 
+/** Извлекает размер файла вложения. */
 private fun MessageDto.extractFileSize(): Long? {
     return when {
         photo != null -> photo.maxByOrNull { it.width }?.fileSize

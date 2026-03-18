@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
+/** Экран входа по Telegram bot token. */
 @Composable
 fun LoginScreen(
     onCheckToken: suspend (String) -> Boolean,
@@ -118,6 +119,7 @@ fun LoginScreen(
             Button(
                 onClick = {
                     scope.launch {
+                        // Проверка токена вынесена наружу, чтобы экран оставался UI-слоем.
                         isLoading = true
                         errorMessage = null
                         val isValid = onCheckToken(token)

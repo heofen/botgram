@@ -14,6 +14,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+/** Тесты процессора входящих обновлений Telegram. */
 class TelegramUpdateProcessorTest {
     @Test
     fun process_unsupportedUpdate_isNoOp() {
@@ -149,6 +150,7 @@ class TelegramUpdateProcessorTest {
     }
 }
 
+/** Фейковое хранилище чатов для unit-тестов. */
 private class FakeChatStore : ChatSyncStore {
     val upsertedChats = mutableListOf<Chat>()
     var lastPreviewText: String? = null
@@ -170,6 +172,7 @@ private class FakeChatStore : ChatSyncStore {
     }
 }
 
+/** Фейковое хранилище сообщений для unit-тестов. */
 private class FakeMessageStore : MessageSyncStore {
     val messages = linkedMapOf<Pair<Long, Long>, Message>()
 
@@ -218,6 +221,7 @@ private class FakeMessageStore : MessageSyncStore {
     }
 }
 
+/** Фейковое хранилище пользователей для unit-тестов. */
 private class FakeUserStore : UserSyncStore {
     val upsertedUsers = mutableListOf<User>()
 

@@ -11,12 +11,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
+/** Тёмная цветовая схема по умолчанию для устройств без dynamic color. */
 private val DarkColorScheme = darkColorScheme(
     primary = Grey40,
     secondary = BlueGrey40,
     tertiary = Steel40,
 )
 
+/** Светлая цветовая схема по умолчанию для устройств без dynamic color. */
 private val LightColorScheme = lightColorScheme(
     primary = Grey80,
     secondary = BlueGrey80,
@@ -33,6 +35,7 @@ private val LightColorScheme = lightColorScheme(
     */
 )
 
+/** Общая Material 3 тема приложения. */
 @Composable
 fun BotgramTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

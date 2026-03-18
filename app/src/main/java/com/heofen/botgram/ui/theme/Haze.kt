@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 
+/** Единый стиль haze-эффекта для стеклянных панелей приложения. */
 @Composable
 fun botgramHazeStyle(): HazeStyle = HazeStyle(
     blurRadius = 20.dp,

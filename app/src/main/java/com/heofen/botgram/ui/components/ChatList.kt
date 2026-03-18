@@ -53,6 +53,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+/** Отрисовывает аватар чата или fallback с инициалами, если изображения ещё нет. */
 @Composable
 fun ChatAvatar(
     chat: Chat,
@@ -84,6 +85,7 @@ fun ChatAvatar(
     }
 }
 
+/** Верхняя панель списка чатов с меню, поиском и haze-эффектом. */
 @Composable
 fun ChatListScreenBar(
     title: String,
@@ -225,6 +227,7 @@ fun ChatListScreenBar(
     }
 }
 
+/** Ячейка списка чатов с превью последнего сообщения. */
 @Composable
 fun ChatCell(
     item: ChatListItem,
@@ -322,6 +325,7 @@ fun ChatCell(
     }
 }
 
+/** Форматирует время последнего сообщения для списка диалогов. */
 private fun formatChatTime(timestampMillis: Long?): String {
     if (timestampMillis == null || timestampMillis <= 0L) return ""
 
@@ -332,6 +336,7 @@ private fun formatChatTime(timestampMillis: Long?): String {
     }.getOrDefault("")
 }
 
+/** Собирает человекочитаемый текст превью по типу последнего сообщения. */
 private fun Chat.previewText(): String {
     val textPreview = lastMessageText?.trim().orEmpty()
     if (lastMessageType == MessageType.TEXT && textPreview.isNotEmpty()) {

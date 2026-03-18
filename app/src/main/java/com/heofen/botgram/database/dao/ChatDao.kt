@@ -9,6 +9,7 @@ import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.ChatListItem
 import kotlinx.coroutines.flow.Flow
 
+/** DAO для чтения и обновления чатов и списка диалогов. */
 @Dao
 interface ChatDao {
     @Query(
@@ -57,12 +58,15 @@ interface ChatDao {
     )
     fun getAllChatListItems(): Flow<List<ChatListItem>>
 
+    /** Наблюдает изменения конкретного чата. */
     @Query("SELECT * FROM chats WHERE id = :id")
     fun observeById(id: Long): Flow<Chat?>
 
+    /** Возвращает чат по идентификатору. */
     @Query("SELECT * FROM chats WHERE id = :id")
     suspend fun getById(id: Long): Chat?
 
+    /** Проверяет, сохранён ли чат локально. */
     @Query("SELECT EXISTS(SELECT * FROM chats WHERE id = :chatId)")
     suspend fun chatExists(chatId: Long): Boolean
 
@@ -82,10 +86,7 @@ interface ChatDao {
     """)
     suspend fun updateLastMessage(chatId: Long, type: MessageType?, text: String?, time: Long?, senderId: Long?)
 
-
-//    @Query("UPDATE chats SET isMuted = :isMuted WHERE id = :chatId")
-//    suspend fun updateMuted(chatId: Long, isMuted: Boolean)
-
+    /** Сохраняет сведения об аватаре чата после загрузки файла. */
     @Query("""
         UPDATE chats 
         SET avatarFileId = :fileId,

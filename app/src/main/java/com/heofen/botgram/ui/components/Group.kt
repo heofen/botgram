@@ -70,6 +70,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import java.io.File
 
+/** Отрисовывает аватар пользователя или fallback по инициалам. */
 @Composable
 fun UserAvatar(
     user: User?,
@@ -101,6 +102,7 @@ fun UserAvatar(
     }
 }
 
+/** Поле ввода сообщения с ответом, вложениями и кнопками отправки. */
 @Composable
 fun MessageInput(
     modifier: Modifier = Modifier,
@@ -257,6 +259,7 @@ fun MessageInput(
     }
 }
 
+/** Горизонтальная лента ещё не отправленных медиафайлов. */
 @Composable
 private fun PendingMediaStrip(
     items: List<ComposerMediaItem>,
@@ -277,6 +280,7 @@ private fun PendingMediaStrip(
     }
 }
 
+/** Миниатюра выбранного медиафайла с кнопкой удаления. */
 @Composable
 private fun PendingMediaPreview(
     item: ComposerMediaItem,
@@ -335,6 +339,7 @@ private fun PendingMediaPreview(
     }
 }
 
+/** Превью сообщения, на которое пользователь сейчас отвечает. */
 @Composable
 private fun ReplyComposerPreview(
     replyMessage: Message,
@@ -391,6 +396,7 @@ private fun ReplyComposerPreview(
     }
 }
 
+/** Верхняя панель переписки с названием чата и кнопкой назад. */
 @Composable
 fun GroupScreenBar(
     chat: Chat,
@@ -479,6 +485,7 @@ fun GroupScreenBar(
     }
 }
 
+/** Возвращает лучшее доступное отображаемое название чата. */
 private fun Chat.displayTitle(): String =
     title ?: listOfNotNull(firstName, lastName).joinToString(" ").ifBlank { "" }
 

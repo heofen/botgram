@@ -13,6 +13,7 @@ import com.heofen.botgram.ui.screens.group.GroupViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
+/** Центральный Compose-граф навигации приложения. */
 @Composable
 fun BotgramNavHost(onLogOut: () -> Unit) {
     val navController = rememberNavController()

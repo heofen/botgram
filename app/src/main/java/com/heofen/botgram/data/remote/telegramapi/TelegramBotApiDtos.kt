@@ -1,5 +1,6 @@
 package com.heofen.botgram.data.remote.telegramapi
 
+/** Универсальная оболочка ответа Telegram Bot API. */
 data class TelegramApiResponse<T>(
     val ok: Boolean,
     val result: T?,
@@ -7,12 +8,14 @@ data class TelegramApiResponse<T>(
     val errorCode: Int?
 )
 
+/** DTO обновления long polling. */
 data class UpdateDto(
     val updateId: Long,
     val message: MessageDto?,
     val editedMessage: MessageDto?
 )
 
+/** DTO сообщения Telegram Bot API. */
 data class MessageDto(
     val messageId: Long,
     val date: Long,
@@ -36,6 +39,7 @@ data class MessageDto(
     val location: LocationDto?
 )
 
+/** DTO чата Telegram. */
 data class ChatDto(
     val id: Long,
     val type: String,
@@ -46,12 +50,14 @@ data class ChatDto(
     val photo: ChatPhotoDto?
 )
 
+/** DTO пользователя Telegram. */
 data class UserDto(
     val id: Long,
     val firstName: String,
     val lastName: String?
 )
 
+/** DTO изображения в одном из размеров. */
 data class PhotoSizeDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -60,6 +66,7 @@ data class PhotoSizeDto(
     val height: Int
 )
 
+/** DTO миниатюры медиа. */
 data class ThumbnailDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -68,6 +75,7 @@ data class ThumbnailDto(
     val height: Int
 )
 
+/** DTO видео-вложения. */
 data class VideoDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -79,6 +87,7 @@ data class VideoDto(
     val mimeType: String?
 )
 
+/** DTO анимации/GIF. */
 data class AnimationDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -91,6 +100,7 @@ data class AnimationDto(
     val thumbnail: ThumbnailDto?
 )
 
+/** DTO аудиофайла. */
 data class AudioDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -101,6 +111,7 @@ data class AudioDto(
     val thumbnail: ThumbnailDto?
 )
 
+/** DTO голосового сообщения. */
 data class VoiceDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -109,6 +120,7 @@ data class VoiceDto(
     val mimeType: String?
 )
 
+/** DTO видеосообщения-кружка. */
 data class VideoNoteDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -119,6 +131,7 @@ data class VideoNoteDto(
     val thumbnail: ThumbnailDto?
 )
 
+/** DTO документа. */
 data class DocumentDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -128,6 +141,7 @@ data class DocumentDto(
     val thumbnail: ThumbnailDto?
 )
 
+/** DTO стикера. */
 data class StickerDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -139,6 +153,7 @@ data class StickerDto(
     val thumbnail: ThumbnailDto?
 )
 
+/** DTO контакта. */
 data class ContactDto(
     val phoneNumber: String?,
     val firstName: String?,
@@ -146,11 +161,13 @@ data class ContactDto(
     val userId: Long?
 )
 
+/** DTO геолокации. */
 data class LocationDto(
     val longitude: Double?,
     val latitude: Double?
 )
 
+/** DTO файла Telegram, возвращаемый методом `getFile`. */
 data class TelegramFileDto(
     val fileId: String,
     val fileUniqueId: String,
@@ -158,11 +175,13 @@ data class TelegramFileDto(
     val filePath: String?
 )
 
+/** DTO набора пользовательских аватаров. */
 data class UserProfilePhotosDto(
     val totalCount: Int,
     val photos: List<List<PhotoSizeDto>>
 )
 
+/** DTO фотографии чата. */
 data class ChatPhotoDto(
     val smallFileId: String,
     val smallFileUniqueId: String,

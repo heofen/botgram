@@ -29,6 +29,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
+/**
+ * Foreground-сервис, который держит long polling соединение с Telegram
+ * и сохраняет входящие обновления в локальную базу.
+ */
 class GetUpdates : Service() {
     private val tokenManager: TokenManager by inject()
     private val sessionManager: SessionManager by inject()
@@ -86,6 +90,7 @@ class GetUpdates : Service() {
                 while (isActive) {
                     try {
                         Log.i("GetUpdates", "Launching Long Polling...")
+                        // `collectUpdates` сам делает длинный запрос, а внешний цикл нужен для перезапуска после ошибки.
                         activeSession.gateway.collectUpdates { update ->
                             handleUpdate(update)
                         }
@@ -100,6 +105,7 @@ class GetUpdates : Service() {
         return START_STICKY
     }
 
+    /** Пропускает обновление через процессор синхронизации и запускает докачку медиа. */
     private suspend fun handleUpdate(update: TelegramUpdate) {
         try {
             val storedMessage = updateProcessor.process(update)
@@ -115,6 +121,7 @@ class GetUpdates : Service() {
         }
     }
 
+    /** Создаёт обязательную foreground-нотификацию сервиса. */
     private fun createNotification(): Notification {
         val channel = NotificationChannel(
             CHANNEL_ID,

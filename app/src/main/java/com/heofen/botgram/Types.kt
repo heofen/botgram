@@ -1,5 +1,6 @@
 package com.heofen.botgram
 
+/** Типы чатов, поддерживаемые приложением. */
 enum class ChatType {
     PRIVATE,
     GROUP,
@@ -7,6 +8,7 @@ enum class ChatType {
     SUPERGROUP,
 }
 
+/** Типы сообщений, с которыми умеет работать локальная модель. */
 enum class MessageType {
     TEXT,
     PHOTO,
