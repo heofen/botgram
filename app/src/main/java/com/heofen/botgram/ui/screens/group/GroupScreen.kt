@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,9 +73,11 @@ import kotlinx.coroutines.launch
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val hazeState = remember { HazeState() }
+    val density = LocalDensity.current
     val horizontalContentPadding = 12.dp
     var actionMessage by remember { mutableStateOf<Message?>(null) }
     var deleteMessage by remember { mutableStateOf<Message?>(null) }
+    var composerHeightPx by remember { mutableStateOf(0) }
     val messagesById = remember(uiState.messages) {
         uiState.messages.associateBy { it.messageId }
     }
@@ -92,9 +96,13 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             val layoutDirection = LocalLayoutDirection.current
 
             val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
+            val navigationBarPadding = WindowInsets.navigationBars.asPaddingValues()
             val topContentPadding = statusBarPadding.calculateTopPadding() + 64.dp
-
-            val bottomInputPadding = if (selectedReplyMessage != null) 126.dp else 70.dp
+            val composerHeight = with(density) { composerHeightPx.toDp() }
+            val bottomInputPadding = maxOf(
+                70.dp,
+                composerHeight + navigationBarPadding.calculateBottomPadding() + 16.dp
+            )
 
             LazyColumn(
                 modifier = Modifier
@@ -136,10 +144,6 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                     val showSenderName = !isPersonalChat && !message.isOutgoing && !isGroupedWithOlder
                     val itemSpacing = if (isGroupedWithNewer) 2.dp else 12.dp
 
-                    if (showDateHeader) {
-                        MessageDateDivider(timestamp = message.timestamp)
-                    }
-
                     MsgBubble(
                         msg = message,
                         sender = foundSender,
@@ -156,6 +160,10 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                     )
 
                     Spacer(modifier = Modifier.height(itemSpacing))
+
+                    if (showDateHeader) {
+                        MessageDateDivider(timestamp = message.timestamp)
+                    }
                 }
             }
 
@@ -181,6 +189,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 .padding(bottom = 16.dp, start = horizontalContentPadding, end = horizontalContentPadding)
         ) {
             MessageInput(
+                modifier = Modifier.onSizeChanged { composerHeightPx = it.height },
                 text = uiState.messageText,
                 hazeState = hazeState,
                 replyMessage = selectedReplyMessage,
@@ -224,30 +233,25 @@ private fun replySwipeModifier(onReply: () -> Unit): Modifier {
     val maxOffsetPx = with(density) { 96.dp.toPx() }
     val offsetX = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
-    var replyTriggered by remember { mutableStateOf(false) }
 
     return Modifier
         .offset { IntOffset(offsetX.value.roundToInt(), 0) }
         .pointerInput(onReply) {
             detectHorizontalDragGestures(
-                onDragStart = {
-                    replyTriggered = false
-                },
                 onHorizontalDrag = { change, dragAmount ->
                     val nextOffset = (offsetX.value + dragAmount).coerceIn(0f, maxOffsetPx)
                     change.consume()
                     coroutineScope.launch {
                         offsetX.snapTo(nextOffset)
                     }
-
-                    if (!replyTriggered && nextOffset >= triggerDistancePx) {
-                        replyTriggered = true
-                        onReply()
-                    }
                 },
                 onDragEnd = {
+                    val shouldReply = offsetX.value >= triggerDistancePx
                     coroutineScope.launch {
                         offsetX.animateTo(0f)
+                    }
+                    if (shouldReply) {
+                        onReply()
                     }
                 },
                 onDragCancel = {

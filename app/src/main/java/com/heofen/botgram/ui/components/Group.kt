@@ -92,6 +92,7 @@ fun UserAvatar(
 
 @Composable
 fun MessageInput(
+    modifier: Modifier = Modifier,
     text: String,
     hazeState: HazeState,
     replyMessage: Message? = null,
@@ -103,7 +104,7 @@ fun MessageInput(
     val islandStyle = botgramHazeStyle()
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
             .clip(RoundedCornerShape(27.dp))
