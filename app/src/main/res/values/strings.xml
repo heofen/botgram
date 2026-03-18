@@ -2,7 +2,9 @@
     <string name="app_name">botgram</string>
     <string name="action_back">Back</string>
     <string name="action_send">Send</string>
+    <string name="action_open_attachments">Open attachments</string>
     <string name="action_attach_media">Attach media</string>
+    <string name="attachment_menu_location">Location</string>
     <string name="action_remove_media">Remove media</string>
     <string name="message_input_placeholder">Message...</string>
     <string name="message_actions_title">Message actions</string>
@@ -14,4 +16,9 @@
     <string name="message_delete_for_everyone">For everyone</string>
     <string name="message_reply_title">Reply</string>
     <string name="action_cancel_reply">Cancel reply</string>
+    <string name="location_unavailable">Unable to get location</string>
+    <string name="location_permission_denied">Location permission was not granted</string>
+    <string name="location_resolved_sending">Location resolved, sending</string>
+    <string name="location_sent_success">Location sent</string>
+    <string name="location_send_failed">Failed to send location</string>
 </resources>

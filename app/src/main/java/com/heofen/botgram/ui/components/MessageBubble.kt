@@ -884,6 +884,8 @@ fun MsgBubblePreview() {
         height = null,
         duration = null,
         thumbnailFileId = null,
+        latitude = null,
+        longitude = null,
         isEdited = false,
         editedAt = null,
         mediaGroupId = null,

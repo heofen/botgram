@@ -2,7 +2,9 @@
     <string name="app_name">botgram</string>
     <string name="action_back">Назад</string>
     <string name="action_send">Отправить</string>
+    <string name="action_open_attachments">Открыть вложения</string>
     <string name="action_attach_media">Прикрепить медиа</string>
+    <string name="attachment_menu_location">Геолокация</string>
     <string name="action_remove_media">Убрать медиа</string>
     <string name="message_input_placeholder">Сообщение...</string>
     <string name="message_actions_title">Действия с сообщением</string>
@@ -14,4 +16,9 @@
     <string name="message_delete_for_everyone">У всех</string>
     <string name="message_reply_title">Ответ</string>
     <string name="action_cancel_reply">Отменить ответ</string>
+    <string name="location_unavailable">Не удалось получить геолокацию</string>
+    <string name="location_permission_denied">Разрешение на геолокацию не выдано</string>
+    <string name="location_resolved_sending">Геолокация получена, отправляю</string>
+    <string name="location_sent_success">Геолокация отправлена</string>
+    <string name="location_send_failed">Не удалось отправить геолокацию</string>
 </resources>

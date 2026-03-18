@@ -367,11 +367,25 @@ fun ContactMessage(
 
 @Composable
 fun LocationMessage(msg: Message) {
+    val context = LocalContext.current
+    val latitude = msg.latitude
+    val longitude = msg.longitude
+    val coordinatesLabel = remember(latitude, longitude) {
+        if (latitude == null || longitude == null) {
+            null
+        } else {
+            String.format(Locale.US, "%.6f, %.6f", latitude, longitude)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
+            .clickable(enabled = latitude != null && longitude != null) {
+                openLocationOnMap(context, latitude, longitude)
+            }
     ) {
         Box(
             modifier = Modifier
@@ -388,17 +402,28 @@ fun LocationMessage(msg: Message) {
             )
         }
         Text(
-            text = "Location preview",
+            text = "Location",
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = 12.dp)
         )
         Text(
-            text = msg.text ?: "Map coordinates are not available in the current model yet.",
+            text = coordinatesLabel ?: "Coordinates are unavailable.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
         )
     }
+}
+
+private fun openLocationOnMap(context: Context, latitude: Double?, longitude: Double?) {
+    if (latitude == null || longitude == null) return
+
+    val intent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("https://www.google.com/maps/search/?api=1&query=$latitude,$longitude")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    runCatching { context.startActivity(intent) }
 }
 
 fun formatFileSize(size: Long?): String {

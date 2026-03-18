@@ -34,6 +34,8 @@ data class Message(
     val height: Int?,
     val duration: Long?,
     val thumbnailFileId: String?,
+    val latitude: Double?,
+    val longitude: Double?,
 
     val isEdited: Boolean = false,
     val editedAt: Long? = null,

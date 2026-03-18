@@ -32,6 +32,8 @@ fun TelegramIncomingMessage.toDbMessage(
         height = height,
         duration = duration,
         thumbnailFileId = thumbnailFileId,
+        latitude = latitude,
+        longitude = longitude,
         isEdited = isEdited,
         editedAt = editedAt,
         mediaGroupId = mediaGroupId,

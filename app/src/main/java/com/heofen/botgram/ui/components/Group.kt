@@ -25,16 +25,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -103,12 +110,14 @@ fun MessageInput(
     replySender: User? = null,
     pendingMedia: List<ComposerMediaItem> = emptyList(),
     onTextChange: (String) -> Unit,
-    onAttachClick: () -> Unit = {},
+    onAttachmentLocationClick: () -> Unit = {},
+    onMediaClick: () -> Unit = {},
     onSendClick: () -> Unit,
     onRemovePendingMedia: (String) -> Unit = {},
     onCancelReply: () -> Unit = {}
 ) {
     val islandStyle = botgramHazeStyle()
+    var attachmentsExpanded by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -177,8 +186,44 @@ fun MessageInput(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
+                Box {
+                    IconButton(
+                        onClick = { attachmentsExpanded = true },
+                        colors = IconButtonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledContainerColor = Color.Transparent,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = stringResource(R.string.action_open_attachments)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = attachmentsExpanded,
+                        onDismissRequest = { attachmentsExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.attachment_menu_location)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                attachmentsExpanded = false
+                                onAttachmentLocationClick()
+                            }
+                        )
+                    }
+                }
+
                 IconButton(
-                    onClick = onAttachClick,
+                    onClick = onMediaClick,
                     colors = IconButtonColors(
                         containerColor = Color.Transparent,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -187,7 +232,7 @@ fun MessageInput(
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.AttachFile,
+                        imageVector = Icons.Default.Image,
                         contentDescription = stringResource(R.string.action_attach_media)
                     )
                 }
@@ -476,7 +521,8 @@ private fun MessageInputPreview() {
             hazeState = hazeState,
             pendingMedia = emptyList(),
             onTextChange = {},
-            onAttachClick = {},
+            onAttachmentLocationClick = {},
+            onMediaClick = {},
             onSendClick = {},
             onRemovePendingMedia = {}
         )

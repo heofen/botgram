@@ -132,6 +132,40 @@ class GroupViewModel(
         }
     }
 
+    suspend fun sendLocation(latitude: Double, longitude: Double): Boolean {
+        val replyToMessageId = _uiState.value.replyToMessageId
+
+        return try {
+            val sentMessage = messageRepository.sendLocationMessage(
+                chatId = chatId,
+                latitude = latitude,
+                longitude = longitude,
+                replyToMessageId = replyToMessageId
+            )
+            if (sentMessage != null) {
+                _uiState.update {
+                    it.copy(
+                        messageText = "",
+                        replyToMessageId = null
+                    )
+                }
+                chatRepository.updateLastMessage(
+                    chatId = sentMessage.chatId,
+                    type = sentMessage.type,
+                    text = sentMessage.text ?: sentMessage.caption,
+                    time = sentMessage.timestamp,
+                    senderId = sentMessage.senderId
+                )
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e("GroupViewModel", "Failed to send location", e)
+            false
+        }
+    }
+
     fun addPendingMedia(items: List<ComposerMediaItem>) {
         if (items.isEmpty()) return
         _uiState.update { state ->

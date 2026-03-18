@@ -60,6 +60,20 @@ class HttpTelegramGateway(
             .toIncomingMessage()
     }
 
+    override suspend fun sendLocationMessage(
+        chatId: Long,
+        latitude: Double,
+        longitude: Double,
+        replyToMessageId: Long?
+    ): TelegramIncomingMessage {
+        return apiClient.sendLocation(
+            chatId = chatId,
+            latitude = latitude,
+            longitude = longitude,
+            replyToMessageId = replyToMessageId
+        ).toIncomingMessage()
+    }
+
     override suspend fun sendPhotoMessage(
         chatId: Long,
         file: File,
@@ -231,6 +245,8 @@ private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {
         height = extractMediaHeight(),
         duration = extractMediaDuration(),
         thumbnailFileId = extractThumbnailFileId(),
+        latitude = location?.latitude,
+        longitude = location?.longitude,
         isEdited = editDate != null,
         editedAt = editDate?.times(1000),
         mediaGroupId = mediaGroupId,

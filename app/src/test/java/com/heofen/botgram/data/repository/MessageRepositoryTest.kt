@@ -90,6 +90,8 @@ class MessageRepositoryTest {
             height = null,
             duration = null,
             thumbnailFileId = null,
+            latitude = null,
+            longitude = null,
             isEdited = isEdited,
             editedAt = editedAt,
             mediaGroupId = null,

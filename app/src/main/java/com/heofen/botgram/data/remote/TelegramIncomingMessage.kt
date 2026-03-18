@@ -23,6 +23,8 @@ data class TelegramIncomingMessage(
     val height: Int?,
     val duration: Long?,
     val thumbnailFileId: String?,
+    val latitude: Double?,
+    val longitude: Double?,
     val isEdited: Boolean,
     val editedAt: Long?,
     val mediaGroupId: String?,

@@ -1,9 +1,17 @@
 package com.heofen.botgram.ui.screens.group
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ContentResolver
+import android.content.Context
+import android.content.pm.PackageManager
 import android.database.Cursor
+import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -70,6 +78,9 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.os.CancellationSignal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -79,7 +90,10 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 @Composable
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
@@ -119,6 +133,17 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                     )
                 }
             )
+        }
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.any { it.value }) {
+            coroutineScope.launch {
+                context.sendCurrentLocationOrNotify(viewModel)
+            }
+        } else {
+            context.showLocationToast(R.string.location_permission_denied)
         }
     }
     val selectedReplyMessage = uiState.replyToMessageId?.let(messagesById::get)
@@ -236,7 +261,21 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 replySender = selectedReplySender,
                 pendingMedia = uiState.pendingMedia,
                 onTextChange = viewModel::onMessageChange,
-                onAttachClick = {
+                onAttachmentLocationClick = {
+                    if (context.hasAnyLocationPermission()) {
+                        coroutineScope.launch {
+                            context.sendCurrentLocationOrNotify(viewModel)
+                        }
+                    } else {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
+                    }
+                },
+                onMediaClick = {
                     mediaPickerLauncher.launch(
                         PickVisualMediaRequest(
                             ActivityResultContracts.PickVisualMedia.ImageAndVideo
@@ -271,6 +310,103 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                     deleteMessage = null
                 }
             )
+        }
+    }
+}
+
+private fun Context.hasAnyLocationPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun Context.showLocationToast(messageResId: Int) {
+    Toast.makeText(this, getString(messageResId), Toast.LENGTH_SHORT).show()
+}
+
+private suspend fun Context.sendCurrentLocationOrNotify(viewModel: GroupViewModel) {
+    val location = resolveCurrentLocation()
+    if (location == null) {
+        showLocationToast(R.string.location_unavailable)
+        return
+    }
+
+    Log.d(
+        "GroupScreen",
+        "Resolved location lat=${location.latitude}, lon=${location.longitude}"
+    )
+    showLocationToast(R.string.location_resolved_sending)
+
+    val sent = viewModel.sendLocation(
+        latitude = location.latitude,
+        longitude = location.longitude
+    )
+    if (sent) {
+        showLocationToast(R.string.location_sent_success)
+    } else {
+        showLocationToast(R.string.location_send_failed)
+    }
+}
+
+@SuppressLint("MissingPermission")
+private suspend fun Context.resolveCurrentLocation(): Location? {
+    val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
+    val providers = buildList<String> {
+        if (runCatching { locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) }.getOrDefault(false)) {
+            add(LocationManager.GPS_PROVIDER)
+        }
+        if (runCatching { locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) }.getOrDefault(false)) {
+            add(LocationManager.NETWORK_PROVIDER)
+        }
+    }
+
+    if (providers.isEmpty()) {
+        return null
+    }
+
+    providers.asSequence()
+        .mapNotNull { provider -> runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull() }
+        .maxByOrNull { it.time }
+        ?.let { return it }
+
+    providers.forEach { provider ->
+        withTimeoutOrNull(4_000L) {
+            locationManager.awaitCurrentLocationCompat(
+                provider = provider,
+                context = this@resolveCurrentLocation
+            )
+        }?.let { return it }
+    }
+
+    return null
+}
+
+@SuppressLint("MissingPermission")
+private suspend fun LocationManager.awaitCurrentLocationCompat(
+    provider: String,
+    context: Context
+): Location? = suspendCancellableCoroutine { continuation ->
+    val cancellationSignal = CancellationSignal()
+    continuation.invokeOnCancellation { cancellationSignal.cancel() }
+
+    runCatching {
+        LocationManagerCompat.getCurrentLocation(
+            this,
+            provider,
+            cancellationSignal,
+            context.mainExecutor
+        ) { location ->
+            if (continuation.isActive) {
+                continuation.resume(location)
+            }
+        }
+    }.onFailure {
+        if (continuation.isActive) {
+            continuation.resume(null)
         }
     }
 }

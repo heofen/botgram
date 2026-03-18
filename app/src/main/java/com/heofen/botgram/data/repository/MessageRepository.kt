@@ -116,6 +116,29 @@ class MessageRepository(
         }
     }
 
+    suspend fun sendLocationMessage(
+        chatId: Long,
+        latitude: Double,
+        longitude: Double,
+        replyToMessageId: Long? = null
+    ): Message? {
+        return try {
+            val sentMessage = gateway.sendLocationMessage(
+                chatId = chatId,
+                latitude = latitude,
+                longitude = longitude,
+                replyToMessageId = replyToMessageId
+            )
+            val dbMessage = sentMessage.toDbMessage(isOutgoing = true, readStatus = true)
+            messageDao.insert(dbMessage)
+            Log.i("MessageRepository", "Location sent: ${sentMessage.messageId}")
+            dbMessage
+        } catch (e: Exception) {
+            Log.e("MessageRepository", "Error sending location: ${e.message}", e)
+            null
+        }
+    }
+
     suspend fun sendVisualMediaMessage(
         chatId: Long,
         localFile: File,
@@ -262,6 +285,8 @@ internal fun mergeRemoteMessageWithLocalState(
         height = incoming.height ?: existing.height,
         duration = incoming.duration ?: existing.duration,
         thumbnailFileId = incoming.thumbnailFileId ?: existing.thumbnailFileId,
+        latitude = incoming.latitude ?: existing.latitude,
+        longitude = incoming.longitude ?: existing.longitude,
         isEdited = incoming.isEdited || existing.isEdited,
         editedAt = incoming.editedAt ?: existing.editedAt,
         mediaGroupId = incoming.mediaGroupId ?: existing.mediaGroupId,

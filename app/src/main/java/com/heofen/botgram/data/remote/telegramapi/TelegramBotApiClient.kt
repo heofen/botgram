@@ -72,6 +72,25 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendMessage"))
     }
 
+    suspend fun sendLocation(
+        chatId: Long,
+        latitude: Double,
+        longitude: Double,
+        replyToMessageId: Long? = null
+    ): MessageDto {
+        val bodyBuilder = FormBody.Builder()
+            .add("chat_id", chatId.toString())
+            .add("latitude", latitude.toString())
+            .add("longitude", longitude.toString())
+
+        if (replyToMessageId != null) {
+            bodyBuilder.add("reply_to_message_id", replyToMessageId.toString())
+        }
+
+        val json = postJson("sendLocation", bodyBuilder.build())
+        return parseMessage(requireResultObject(parseApiResponse(json), "sendLocation"))
+    }
+
     suspend fun sendPhoto(
         chatId: Long,
         file: File,

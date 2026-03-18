@@ -22,6 +22,13 @@ interface TelegramGateway {
         replyToMessageId: Long? = null
     ): TelegramIncomingMessage
 
+    suspend fun sendLocationMessage(
+        chatId: Long,
+        latitude: Double,
+        longitude: Double,
+        replyToMessageId: Long? = null
+    ): TelegramIncomingMessage
+
     suspend fun sendPhotoMessage(
         chatId: Long,
         file: File,
