@@ -186,6 +186,37 @@ class MessageRepository(
         }
     }
 
+    suspend fun sendDocumentMessage(
+        chatId: Long,
+        localFile: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): Message? {
+        return try {
+            val sentMessage = gateway.sendDocumentMessage(
+                chatId = chatId,
+                file = localFile,
+                mimeType = mimeType,
+                caption = caption,
+                replyToMessageId = replyToMessageId
+            )
+
+            val dbMessage = sentMessage.toDbMessage(isOutgoing = true, readStatus = true).copy(
+                fileLocalPath = localFile.absolutePath,
+                fileName = sentMessage.fileName ?: localFile.name,
+                fileExtension = sentMessage.fileExtension
+                    ?: localFile.extension.takeIf { it.isNotBlank() }
+            )
+            messageDao.insert(dbMessage)
+            Log.i("MessageRepository", "Document sent: ${sentMessage.messageId}")
+            dbMessage
+        } catch (e: Exception) {
+            Log.e("MessageRepository", "Error sending document: ${e.message}", e)
+            null
+        }
+    }
+
     suspend fun sendVisualMediaMessages(
         chatId: Long,
         media: List<OutgoingVisualMedia>,

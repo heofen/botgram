@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.DropdownMenu
@@ -113,6 +114,7 @@ fun MessageInput(
     pendingMedia: List<ComposerMediaItem> = emptyList(),
     onTextChange: (String) -> Unit,
     onAttachmentLocationClick: () -> Unit = {},
+    onAttachmentFileClick: () -> Unit = {},
     onMediaClick: () -> Unit = {},
     onSendClick: () -> Unit,
     onRemovePendingMedia: (String) -> Unit = {},
@@ -219,6 +221,19 @@ fun MessageInput(
                             onClick = {
                                 attachmentsExpanded = false
                                 onAttachmentLocationClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.attachment_menu_file)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                attachmentsExpanded = false
+                                onAttachmentFileClick()
                             }
                         )
                     }
@@ -529,6 +544,7 @@ private fun MessageInputPreview() {
             pendingMedia = emptyList(),
             onTextChange = {},
             onAttachmentLocationClick = {},
+            onAttachmentFileClick = {},
             onMediaClick = {},
             onSendClick = {},
             onRemovePendingMedia = {}

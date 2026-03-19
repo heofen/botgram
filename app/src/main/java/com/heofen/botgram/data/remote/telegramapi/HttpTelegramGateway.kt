@@ -76,6 +76,22 @@ class HttpTelegramGateway(
         ).toIncomingMessage()
     }
 
+    override suspend fun sendDocumentMessage(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String?,
+        replyToMessageId: Long?
+    ): TelegramIncomingMessage {
+        return apiClient.sendDocument(
+            chatId = chatId,
+            file = file,
+            mimeType = mimeType,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        ).toIncomingMessage()
+    }
+
     override suspend fun sendPhotoMessage(
         chatId: Long,
         file: File,

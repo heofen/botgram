@@ -39,6 +39,15 @@ interface TelegramGateway {
         replyToMessageId: Long? = null
     ): TelegramIncomingMessage
 
+    /** Отправляет произвольный файл как документ. */
+    suspend fun sendDocumentMessage(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): TelegramIncomingMessage
+
     /** Отправляет одиночную фотографию. */
     suspend fun sendPhotoMessage(
         chatId: Long,

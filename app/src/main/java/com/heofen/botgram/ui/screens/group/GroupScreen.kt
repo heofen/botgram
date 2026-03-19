@@ -136,6 +136,36 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             )
         }
     }
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        coroutineScope.launch {
+            val preparedDocument = runCatching {
+                withContext(Dispatchers.IO) {
+                    prepareFileForUpload(
+                        contentResolver = context.contentResolver,
+                        cacheDir = context.cacheDir,
+                        uri = uri
+                    )
+                }
+            }.getOrNull()
+
+            if (preparedDocument == null) {
+                context.showUploadToast(R.string.document_prepare_failed)
+                return@launch
+            }
+
+            val sent = viewModel.sendDocument(
+                localPath = preparedDocument.localPath,
+                mimeType = preparedDocument.mimeType
+            )
+            context.showUploadToast(
+                if (sent) R.string.document_sent_success else R.string.document_send_failed
+            )
+        }
+    }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -277,6 +307,9 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                         )
                     }
                 },
+                onAttachmentFileClick = {
+                    documentPickerLauncher.launch(arrayOf("*/*"))
+                },
                 onMediaClick = {
                     mediaPickerLauncher.launch(
                         PickVisualMediaRequest(
@@ -329,6 +362,11 @@ private fun Context.hasAnyLocationPermission(): Boolean {
 
 /** Показывает короткий toast с результатом работы геолокации. */
 private fun Context.showLocationToast(messageResId: Int) {
+    Toast.makeText(this, getString(messageResId), Toast.LENGTH_SHORT).show()
+}
+
+/** Показывает короткий toast для операций с файлами. */
+private fun Context.showUploadToast(messageResId: Int) {
     Toast.makeText(this, getString(messageResId), Toast.LENGTH_SHORT).show()
 }
 
@@ -425,6 +463,12 @@ private data class PreparedVisualMedia(
     val fileName: String
 )
 
+/** Локальная модель подготовленного файла для отправки документом. */
+private data class PreparedUploadFile(
+    val localPath: String,
+    val mimeType: String
+)
+
 /** Копирует выбранный медиафайл во внутренний cache, чтобы безопасно отправить его позже. */
 private fun prepareVisualMediaForUpload(
     contentResolver: ContentResolver,
@@ -455,6 +499,42 @@ private fun prepareVisualMediaForUpload(
         localPath = targetFile.absolutePath,
         mimeType = mimeType,
         fileName = displayName ?: targetFile.name
+    )
+}
+
+/** Копирует выбранный файл во внутренний cache, чтобы безопасно отправить его позже. */
+private fun prepareFileForUpload(
+    contentResolver: ContentResolver,
+    cacheDir: File,
+    uri: Uri
+): PreparedUploadFile? {
+    val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+    val displayName = contentResolver.queryDisplayName(uri)
+    val extension = displayName
+        ?.substringAfterLast('.', "")
+        ?.takeIf { it.isNotBlank() }
+        ?: mimeType.substringAfter('/', "").substringBefore(';').takeIf { it.isNotBlank() }
+        ?: "bin"
+    val safeBaseName = displayName
+        ?.substringBeforeLast('.', displayName)
+        ?.replace(Regex("""[\\/:*?"<>|]"""), "_")
+        ?.takeIf { it.isNotBlank() }
+        ?: "file"
+    val uploadsDir = File(cacheDir, "uploads").apply { mkdirs() }
+    val targetFile = File(
+        uploadsDir,
+        "${safeBaseName}_${System.nanoTime()}.${extension}"
+    )
+
+    contentResolver.openInputStream(uri)?.use { input ->
+        targetFile.outputStream().use { output ->
+            input.copyTo(output)
+        }
+    } ?: throw IOException("Unable to open selected file")
+
+    return PreparedUploadFile(
+        localPath = targetFile.absolutePath,
+        mimeType = mimeType
     )
 }
 

@@ -171,6 +171,43 @@ class GroupViewModel(
         }
     }
 
+    suspend fun sendDocument(localPath: String, mimeType: String): Boolean {
+        val state = _uiState.value
+        val caption = state.messageText.trim().ifBlank { null }
+        val replyToMessageId = state.replyToMessageId
+
+        return try {
+            val sentMessage = messageRepository.sendDocumentMessage(
+                chatId = chatId,
+                localFile = File(localPath),
+                mimeType = mimeType,
+                caption = caption,
+                replyToMessageId = replyToMessageId
+            )
+            if (sentMessage != null) {
+                _uiState.update {
+                    it.copy(
+                        messageText = "",
+                        replyToMessageId = null
+                    )
+                }
+                chatRepository.updateLastMessage(
+                    chatId = sentMessage.chatId,
+                    type = sentMessage.type,
+                    text = sentMessage.text ?: sentMessage.caption ?: sentMessage.fileName,
+                    time = sentMessage.timestamp,
+                    senderId = sentMessage.senderId
+                )
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e("GroupViewModel", "Failed to send document", e)
+            false
+        }
+    }
+
     fun addPendingMedia(items: List<ComposerMediaItem>) {
         if (items.isEmpty()) return
         _uiState.update { state ->

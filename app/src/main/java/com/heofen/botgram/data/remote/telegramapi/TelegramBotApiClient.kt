@@ -100,6 +100,26 @@ class TelegramBotApiClient(
         return parseMessage(requireResultObject(parseApiResponse(json), "sendLocation"))
     }
 
+    /** Отправляет файл как документ multipart-запросом. */
+    suspend fun sendDocument(
+        chatId: Long,
+        file: File,
+        mimeType: String,
+        caption: String? = null,
+        replyToMessageId: Long? = null
+    ): MessageDto {
+        val body = buildMultipartMediaBody(
+            fieldName = "document",
+            chatId = chatId,
+            file = file,
+            mimeType = mimeType,
+            caption = caption,
+            replyToMessageId = replyToMessageId
+        )
+        val json = postMultipartJson("sendDocument", body)
+        return parseMessage(requireResultObject(parseApiResponse(json), "sendDocument"))
+    }
+
     /** Отправляет фотографию multipart-запросом. */
     suspend fun sendPhoto(
         chatId: Long,

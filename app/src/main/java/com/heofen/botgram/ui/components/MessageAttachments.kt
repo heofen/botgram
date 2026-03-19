@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -322,27 +323,104 @@ fun DocumentMessage(
 ) {
     val context = LocalContext.current
     val file = msg.fileLocalPath?.let(::File)
+    val extensionLabel = remember(msg.fileName, msg.fileExtension) {
+        documentExtensionLabel(msg)
+    }
+    val sizeLabel = remember(msg.fileSize) {
+        formatFileSize(msg.fileSize).takeIf { it.isNotBlank() }
+    }
 
-    AttachmentCard(
-        modifier = modifier,
-        enabled = file.existsOnDisk(),
-        onClick = { openMessageFile(context, file, "*/*") }
+    val statusLabel = remember(file?.path) {
+        if (file.existsOnDisk()) "Tap to open" else "Unavailable"
+    }
+    val footerLabel = remember(sizeLabel, statusLabel) {
+        listOfNotNull(sizeLabel, statusLabel).joinToString(" • ")
+    }
+    val accentColor = if (msg.isOutgoing) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    val iconSurface = if (msg.isOutgoing) {
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+    }
+    val pillColor = accentColor.copy(alpha = 0.12f)
+    val metaColor = accentColor.copy(alpha = 0.72f)
+
+    Row(
+        modifier = modifier
+            .then(
+                if (file.existsOnDisk()) {
+                    Modifier.clickable { openMessageFile(context, file, "*/*") }
+                } else {
+                    Modifier
+                }
+            )
+            .widthIn(min = 220.dp, max = 320.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        AttachmentIconBox(
-            backgroundColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f),
-            shape = RoundedCornerShape(10.dp)
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(iconSurface),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = "File",
-                tint = MaterialTheme.colorScheme.tertiary
+                tint = accentColor,
+                modifier = Modifier.size(26.dp)
             )
         }
-        Spacer(modifier = Modifier.width(10.dp))
-        AttachmentInfo(
-            title = msg.fileName ?: "Document",
-            subtitle = formatFileSize(msg.fileSize)
-        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = msg.fileName ?: "Document",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 20.sp
+                ),
+                color = accentColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                extensionLabel?.let {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(pillColor)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = accentColor
+                        )
+                    }
+                }
+                if (footerLabel.isNotBlank()) {
+                    Text(
+                        text = footerLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = metaColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -838,13 +916,14 @@ private fun AttachmentIconBox(
 @Composable
 private fun AttachmentInfo(
     title: String,
-    subtitle: String
+    subtitle: String,
+    titleMaxLines: Int = 1
 ) {
     Column(modifier = Modifier.widthIn(max = 190.dp)) {
         Text(
             text = title,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
+            maxLines = titleMaxLines,
             overflow = TextOverflow.Ellipsis
         )
         if (subtitle.isNotBlank()) {
@@ -861,3 +940,18 @@ private fun AttachmentInfo(
 
 /** Безопасно проверяет наличие файла на диске. */
 private fun File?.existsOnDisk(): Boolean = this?.exists() == true
+
+private fun documentExtensionLabel(msg: Message): String? {
+    val rawExtension = msg.fileExtension
+        ?.trim()
+        ?.removePrefix(".")
+        ?.takeIf { it.isNotBlank() }
+        ?: msg.fileName
+            ?.substringAfterLast('.', "")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+    return rawExtension
+        ?.uppercase(Locale.US)
+        ?.take(6)
+}
