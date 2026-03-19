@@ -5,8 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -46,7 +49,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalDensity
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
@@ -66,6 +68,21 @@ enum class MsgBubbleClusterPosition {
     Top,
     Middle,
     Bottom
+}
+
+private object MsgBubbleTokens {
+    val BubbleCornerRadius = 12.dp
+    val BubbleHorizontalPadding = 12.dp
+    val BubbleVerticalPadding = 8.dp
+    val AttachmentBubblePadding = 8.dp
+    val TimestampEnd = 8.dp
+    val TimestampBottom = 8.dp
+    val TimestampReservedWidth = 40.dp
+    val TimestampReservedHeight = 16.dp
+    val TextBottomAir = 4.dp
+    val CaptionTopSpacing = 6.dp
+    val AttachmentBottomReserve = 20.dp
+    val InlineMetaGap = 4.dp
 }
 
 /** Разделитель по дате между сообщениями разных календарных дней. */
@@ -133,8 +150,12 @@ fun MsgBubble(
         else -> !msg.caption.isNullOrBlank()
     }
     val showMediaMetaOverlay = isVisualMediaBubble && !hasBodyText
-    val bodyHorizontalPadding = if (showChrome) 12.dp else 4.dp
-    val bodyTopPadding = if (showChrome && msg.replyMsgId == null && !isMediaBubble) 10.dp else 0.dp
+    val bodyHorizontalPadding = if (showChrome) MsgBubbleTokens.BubbleHorizontalPadding else 4.dp
+    val bodyTopPadding = if (showChrome && msg.replyMsgId == null && !isMediaBubble) {
+        MsgBubbleTokens.BubbleVerticalPadding
+    } else {
+        0.dp
+    }
     val containerColor = if (msg.isOutgoing) {
         MaterialTheme.colorScheme.secondaryContainer
     } else {
@@ -167,8 +188,8 @@ fun MsgBubble(
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val maxBubbleWidth = when {
             msg.type == MessageType.VIDEO_NOTE || msg.type.isStickerType() -> 220.dp
-            isMediaBubble -> maxWidth * 0.72f
-            else -> maxWidth * 0.76f
+            isMediaBubble -> maxWidth * 0.7f
+            else -> maxWidth * 0.7f
         }
 
         Row(
@@ -366,11 +387,13 @@ private fun BubbleBodyContent(
     metaColor: Color,
     mediaShape: RoundedCornerShape
 ) {
-    Column(modifier = Modifier.wrapContentWidth()) {
+    val showPinnedMeta = !showMediaMetaOverlay && msg.type != MessageType.TEXT
+
+    val bodyContent: @Composable () -> Unit = {
         when (msg.type) {
             MessageType.TEXT -> {
                 msg.text?.takeIf { it.isNotBlank() }?.let {
-                    MessageTextWithAdaptiveMeta(
+                    MessageTextWithPinnedMeta(
                         text = it,
                         msg = msg,
                         textColor = contentColor,
@@ -379,10 +402,9 @@ private fun BubbleBodyContent(
                             fontSize = 16.sp,
                             lineHeight = 22.sp
                         ),
-                        fallbackBottomPadding = if (showChrome) 10.dp else 2.dp,
+                        minHeight = 36.dp,
                         modifier = Modifier.padding(
                             start = bodyHorizontalPadding,
-                            end = bodyHorizontalPadding,
                             top = bodyTopPadding
                         )
                     )
@@ -409,17 +431,17 @@ private fun BubbleBodyContent(
 
             MessageType.AUDIO -> AudioMessage(
                 msg = msg,
-                modifier = Modifier.padding(horizontal = 12.dp)
+                modifier = Modifier.padding(horizontal = MsgBubbleTokens.AttachmentBubblePadding)
             )
 
             MessageType.VOICE -> VoiceMessage(
                 msg = msg,
-                modifier = Modifier.padding(horizontal = 12.dp)
+                modifier = Modifier.padding(horizontal = MsgBubbleTokens.AttachmentBubblePadding)
             )
 
             MessageType.DOCUMENT -> DocumentMessage(
                 msg = msg,
-                modifier = Modifier.padding(horizontal = 12.dp)
+                modifier = Modifier.padding(horizontal = MsgBubbleTokens.AttachmentBubblePadding)
             )
 
             MessageType.STICKER,
@@ -428,7 +450,7 @@ private fun BubbleBodyContent(
 
             MessageType.CONTACT -> ContactMessage(
                 msg = msg,
-                modifier = Modifier.padding(horizontal = 12.dp)
+                modifier = Modifier.padding(horizontal = MsgBubbleTokens.AttachmentBubblePadding)
             )
 
             MessageType.LOCATION -> LocationMessage(msg)
@@ -449,66 +471,75 @@ private fun BubbleBodyContent(
         }
 
         if (msg.type != MessageType.TEXT && !msg.caption.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            MessageTextWithAdaptiveMeta(
+            Spacer(modifier = Modifier.height(MsgBubbleTokens.CaptionTopSpacing))
+            CaptionTextBlock(
                 text = msg.caption,
-                msg = msg,
                 textColor = if (showChrome) contentColor else MaterialTheme.colorScheme.onSurface,
-                metaColor = metaColor,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 15.sp,
                     lineHeight = 20.sp
                 ),
-                fallbackBottomPadding = if (showChrome) 10.dp else 2.dp,
                 modifier = Modifier.padding(
                     start = bodyHorizontalPadding,
                     end = bodyHorizontalPadding
                 )
             )
         }
-
-        if (!showMediaMetaOverlay && msg.type != MessageType.TEXT && msg.caption.isNullOrBlank()) {
-            MessageMetaRow(
-                msg = msg,
-                color = metaColor,
+        if (showPinnedMeta && msg.caption.isNullOrBlank()) {
+            Spacer(
                 modifier = Modifier
-                    .align(Alignment.End)
-                    .padding(
-                        start = if (showChrome) 12.dp else 4.dp,
-                        end = if (showChrome) 12.dp else 4.dp,
-                        top = 6.dp,
-                        bottom = if (showChrome) 10.dp else 2.dp
-                    )
+                    .fillMaxWidth()
+                    .height(MsgBubbleTokens.AttachmentBottomReserve)
             )
+        }
+    }
+
+    if (showPinnedMeta) {
+        BubbleMetaAnchoredBox(
+            msg = msg,
+            metaColor = metaColor,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.wrapContentWidth()) {
+                bodyContent()
+            }
+        }
+    } else {
+        Column(modifier = Modifier.wrapContentWidth()) {
+            bodyContent()
         }
     }
 }
 
-/** Строка времени и статуса доставки под сообщением. */
 @Composable
-private fun MessageMetaRow(
-    msg: Message,
-    color: Color,
+private fun CaptionTextBlock(
+    text: String,
+    textStyle: TextStyle,
+    textColor: Color,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MessageMetaContent(msg = msg, color = color)
+    SelectionContainer {
+        Text(
+            text = text,
+            style = textStyle,
+            color = textColor,
+            modifier = modifier.padding(
+                end = MsgBubbleTokens.TimestampReservedWidth,
+                bottom = MsgBubbleTokens.TimestampReservedHeight
+            )
+        )
     }
 }
 
-/** Рисует текст сообщения и пытается встроить метаданные в последнюю строку. */
+/** Рисует текст сообщения с закреплённым временем в правом нижнем углу. */
 @Composable
-private fun MessageTextWithAdaptiveMeta(
+private fun MessageTextWithPinnedMeta(
     text: String,
     msg: Message,
     textStyle: TextStyle,
     textColor: Color,
     metaColor: Color,
-    fallbackBottomPadding: Dp = 0.dp,
+    minHeight: Dp = 0.dp,
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -521,7 +552,8 @@ private fun MessageTextWithAdaptiveMeta(
 
     BoxWithConstraints(modifier = modifier) {
         val availableWidthPx = with(density) { maxWidth.roundToPx() }
-        val textToMetaGapPx = with(density) { 4.dp.roundToPx() }
+        val textToMetaGapPx = with(density) { MsgBubbleTokens.InlineMetaGap.roundToPx() }
+        val timestampEndPx = with(density) { MsgBubbleTokens.TimestampEnd.roundToPx() }
         val metaTextLayout = remember(metaLabel, metaTextStyle) {
             textMeasurer.measure(
                 text = AnnotatedString(metaLabel),
@@ -530,21 +562,12 @@ private fun MessageTextWithAdaptiveMeta(
         }
         val inlineMetaContentWidthPx = remember(msg.isOutgoing, metaTextLayout.size.width, density) {
             metaTextLayout.size.width + if (msg.isOutgoing) {
-                with(density) { 2.dp.roundToPx() + 14.dp.roundToPx() }
-            } else {
-                0
-            }
-        }
-        val separateMetaContentWidthPx = remember(msg.isOutgoing, metaTextLayout.size.width, density) {
-            metaTextLayout.size.width + if (msg.isOutgoing) {
                 with(density) { 4.dp.roundToPx() + 14.dp.roundToPx() }
             } else {
                 0
             }
         }
-        val inlineMetaReserveWidthPx = remember(inlineMetaContentWidthPx, textToMetaGapPx) {
-            inlineMetaContentWidthPx + textToMetaGapPx
-        }
+        val inlineMetaReserveWidthPx = inlineMetaContentWidthPx + textToMetaGapPx + timestampEndPx
         val inlineMetaContentHeightPx = remember(metaTextLayout.size.height, density) {
             max(metaTextLayout.size.height, with(density) { 14.dp.roundToPx() })
         }
@@ -589,19 +612,15 @@ private fun MessageTextWithAdaptiveMeta(
             }
         }
         val inlineBubbleWidthDp = with(density) { inlineBubbleWidthPx.toDp() }
-        val inlineMetaXOffsetPx = inlineBubbleWidthPx - inlineMetaContentWidthPx
+        val inlineMetaXOffsetPx = inlineBubbleWidthPx - inlineMetaContentWidthPx - timestampEndPx
         val inlineMetaYOffsetPx = max(0, inlineLastLineBottomPx - inlineMetaContentHeightPx)
-        val inlineBottomPadding = if (inlineTextLayout.lineCount > 1) fallbackBottomPadding else 0.dp
-        val fallbackBubbleWidthPx = remember(baseLayout.size.width, separateMetaContentWidthPx) {
-            max(baseLayout.size.width, separateMetaContentWidthPx)
-        }
-        val fallbackBubbleWidthDp = with(density) { fallbackBubbleWidthPx.toDp() }
 
         if (canInlineMeta) {
             Box(
                 modifier = Modifier
                     .width(inlineBubbleWidthDp)
-                    .padding(bottom = inlineBottomPadding)
+                    .defaultMinSize(minHeight = minHeight)
+                    .padding(bottom = MsgBubbleTokens.TimestampBottom)
             ) {
                 SelectionContainer {
                     Text(
@@ -611,20 +630,22 @@ private fun MessageTextWithAdaptiveMeta(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Box(
+                MessageMetaContent(
+                    msg = msg,
+                    color = metaColor,
                     modifier = Modifier.offset {
                         IntOffset(
                             x = inlineMetaXOffsetPx,
                             y = inlineMetaYOffsetPx
                         )
                     }
-                ) {
-                    MessageMetaContent(msg = msg, color = metaColor, inline = true)
-                }
+                )
             }
         } else {
             Column(
-                modifier = Modifier.width(fallbackBubbleWidthDp)
+                modifier = Modifier
+                    .defaultMinSize(minHeight = minHeight)
+                    .widthIn(max = maxWidth)
             ) {
                 SelectionContainer {
                     Text(
@@ -633,19 +654,45 @@ private fun MessageTextWithAdaptiveMeta(
                         color = textColor
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    MessageMetaRow(
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            end = MsgBubbleTokens.TimestampEnd,
+                            bottom = MsgBubbleTokens.TimestampBottom
+                        )
+                ) {
+                    MessageMetaContent(
                         msg = msg,
                         color = metaColor,
                         modifier = Modifier.align(Alignment.CenterEnd)
                     )
                 }
-                if (fallbackBottomPadding > 0.dp) {
-                    Spacer(modifier = Modifier.height(fallbackBottomPadding))
-                }
             }
         }
+    }
+}
+
+@Composable
+private fun BubbleMetaAnchoredBox(
+    msg: Message,
+    metaColor: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(modifier = modifier) {
+        content()
+        MessageMetaContent(
+            msg = msg,
+            color = metaColor,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = MsgBubbleTokens.TimestampEnd,
+                    bottom = MsgBubbleTokens.TimestampBottom
+                )
+        )
     }
 }
 
@@ -660,11 +707,12 @@ private fun buildMessageMetaLabel(msg: Message): String {
 private fun MessageMetaContent(
     msg: Message,
     color: Color,
-    inline: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val metaLabel = remember(msg.isEdited, msg.timestamp) { buildMessageMetaLabel(msg) }
 
     Row(
+        modifier = modifier,
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -677,7 +725,7 @@ private fun MessageMetaContent(
         )
 
         if (msg.isOutgoing) {
-            Spacer(modifier = Modifier.width(if (inline) 2.dp else 4.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Icon(
                 imageVector = if (msg.readStatus) Icons.Default.DoneAll else Icons.Default.Done,
                 contentDescription = if (msg.readStatus) "Read" else "Sent",
@@ -791,22 +839,7 @@ private fun msgBubbleShape(
     showChrome: Boolean
 ): RoundedCornerShape {
     if (!showChrome) return RoundedCornerShape(0.dp)
-
-    return if (isOutgoing) {
-        when (position) {
-            MsgBubbleClusterPosition.Single -> RoundedCornerShape(12.dp, 12.dp, 4.dp, 12.dp)
-            MsgBubbleClusterPosition.Top -> RoundedCornerShape(12.dp, 12.dp, 4.dp, 12.dp)
-            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(12.dp, 4.dp, 4.dp, 12.dp)
-            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(12.dp, 4.dp, 12.dp, 12.dp)
-        }
-    } else {
-        when (position) {
-            MsgBubbleClusterPosition.Single -> RoundedCornerShape(12.dp, 12.dp, 12.dp, 4.dp)
-            MsgBubbleClusterPosition.Top -> RoundedCornerShape(12.dp, 12.dp, 12.dp, 4.dp)
-            MsgBubbleClusterPosition.Middle -> RoundedCornerShape(4.dp, 12.dp, 12.dp, 4.dp)
-            MsgBubbleClusterPosition.Bottom -> RoundedCornerShape(4.dp, 12.dp, 12.dp, 12.dp)
-        }
-    }
+    return RoundedCornerShape(MsgBubbleTokens.BubbleCornerRadius)
 }
 
 /** Подбирает форму вложенного медиа с учётом текста сверху и снизу. */

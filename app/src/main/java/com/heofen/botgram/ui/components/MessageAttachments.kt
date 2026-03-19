@@ -78,6 +78,15 @@ import com.heofen.botgram.database.tables.Message
 import java.io.File
 import java.util.Locale
 
+private object AttachmentTokens {
+    val InnerCardRadius = 16.dp
+    val InnerCardPadding = 10.dp
+    val CardMinHeight = 52.dp
+    val IconSize = 32.dp
+    val VoiceMinHeight = 44.dp
+    val WaveformHeight = 20.dp
+}
+
 /** Отрисовывает фото-сообщение или fallback, если файл ещё не скачан. */
 @Composable
 fun MediaMessage(
@@ -223,6 +232,7 @@ fun AudioMessage(
         onClick = { openMessageFile(context, file, "audio/*") }
     ) {
         AttachmentIconBox(
+            size = AttachmentTokens.IconSize,
             backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
         ) {
             Icon(
@@ -257,7 +267,7 @@ fun VoiceMessage(
         onClick = { openMessageFile(context, file, "audio/*") }
     ) {
         AttachmentIconBox(
-            size = 40.dp,
+            size = AttachmentTokens.IconSize,
             backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
         ) {
             Icon(
@@ -267,25 +277,21 @@ fun VoiceMessage(
             )
         }
         Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.widthIn(max = 190.dp)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = AttachmentTokens.VoiceMinHeight),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
             VoiceWaveform(
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 4.dp)
+                modifier = Modifier.padding(top = 2.dp)
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = "Voice",
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = formatDuration(msg.duration),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = formatDuration(msg.duration),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -299,7 +305,7 @@ private fun VoiceWaveform(
     val barHeights = listOf(10, 18, 12, 20, 14, 16, 8, 18, 12, 16, 9, 14)
 
     Row(
-        modifier = modifier.height(20.dp),
+        modifier = modifier.height(AttachmentTokens.WaveformHeight),
         verticalAlignment = Alignment.CenterVertically
     ) {
         barHeights.forEach { height ->
@@ -323,9 +329,6 @@ fun DocumentMessage(
 ) {
     val context = LocalContext.current
     val file = msg.fileLocalPath?.let(::File)
-    val extensionLabel = remember(msg.fileName, msg.fileExtension) {
-        documentExtensionLabel(msg)
-    }
     val sizeLabel = remember(msg.fileSize) {
         formatFileSize(msg.fileSize).takeIf { it.isNotBlank() }
     }
@@ -346,80 +349,46 @@ fun DocumentMessage(
     } else {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
     }
-    val pillColor = accentColor.copy(alpha = 0.12f)
     val metaColor = accentColor.copy(alpha = 0.72f)
 
-    Row(
-        modifier = modifier
-            .then(
-                if (file.existsOnDisk()) {
-                    Modifier.clickable { openMessageFile(context, file, "*/*") }
-                } else {
-                    Modifier
-                }
-            )
-            .widthIn(min = 220.dp, max = 320.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    AttachmentCard(
+        modifier = modifier,
+        enabled = file.existsOnDisk(),
+        onClick = { openMessageFile(context, file, "*/*") }
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(iconSurface),
-            contentAlignment = Alignment.Center
+        AttachmentIconBox(
+            size = AttachmentTokens.IconSize,
+            backgroundColor = iconSurface
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = "File",
                 tint = accentColor,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = msg.fileName ?: "Document",
-                style = MaterialTheme.typography.titleSmall.copy(
+                style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     lineHeight = 20.sp
                 ),
                 color = accentColor,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                extensionLabel?.let {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(pillColor)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = accentColor
-                        )
-                    }
-                }
-                if (footerLabel.isNotBlank()) {
-                    Text(
-                        text = footerLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = metaColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+            Text(
+                text = footerLabel.ifBlank { "Unavailable" },
+                style = MaterialTheme.typography.bodySmall,
+                color = metaColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -434,6 +403,7 @@ fun ContactMessage(
         modifier = modifier
     ) {
         AttachmentIconBox(
+            size = AttachmentTokens.IconSize,
             backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
             shape = RoundedCornerShape(10.dp)
         ) {
@@ -877,8 +847,9 @@ private fun AttachmentCard(
 ) {
     Row(
         modifier = modifier
-            .widthIn(max = 280.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .fillMaxWidth()
+            .heightIn(min = AttachmentTokens.CardMinHeight)
+            .clip(RoundedCornerShape(AttachmentTokens.InnerCardRadius))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
             .then(
                 if (enabled && onClick != null) {
@@ -887,7 +858,7 @@ private fun AttachmentCard(
                     Modifier
                 }
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(AttachmentTokens.InnerCardPadding),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
@@ -898,8 +869,8 @@ private fun AttachmentCard(
 private fun AttachmentIconBox(
     backgroundColor: Color,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 44.dp,
-    shape: RoundedCornerShape = RoundedCornerShape(50.dp),
+    size: androidx.compose.ui.unit.Dp = AttachmentTokens.IconSize,
+    shape: RoundedCornerShape = RoundedCornerShape(16.dp),
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
