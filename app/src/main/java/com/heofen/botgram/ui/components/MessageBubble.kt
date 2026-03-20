@@ -81,8 +81,9 @@ private object MsgBubbleTokens {
     val TimestampReservedHeight = 16.dp
     val TextBottomAir = 4.dp
     val CaptionTopSpacing = 6.dp
-    val AttachmentBottomReserve = 20.dp
+    val AttachmentBottomReserve = 28.dp
     val InlineMetaGap = 4.dp
+    val SingleLineBottomInset = 2.dp
 }
 
 /** Разделитель по дате между сообщениями разных календарных дней. */
@@ -402,9 +403,10 @@ private fun BubbleBodyContent(
                             fontSize = 16.sp,
                             lineHeight = 22.sp
                         ),
-                        minHeight = 36.dp,
+                        minHeight = 0.dp,
                         modifier = Modifier.padding(
                             start = bodyHorizontalPadding,
+                            end = bodyHorizontalPadding,
                             top = bodyTopPadding
                         )
                     )
@@ -614,13 +616,18 @@ private fun MessageTextWithPinnedMeta(
         val inlineBubbleWidthDp = with(density) { inlineBubbleWidthPx.toDp() }
         val inlineMetaXOffsetPx = inlineBubbleWidthPx - inlineMetaContentWidthPx - timestampEndPx
         val inlineMetaYOffsetPx = max(0, inlineLastLineBottomPx - inlineMetaContentHeightPx)
+        val inlineBottomInset = if (inlineTextLayout.lineCount > 1) {
+            MsgBubbleTokens.TimestampBottom
+        } else {
+            MsgBubbleTokens.SingleLineBottomInset
+        }
 
         if (canInlineMeta) {
             Box(
                 modifier = Modifier
                     .width(inlineBubbleWidthDp)
                     .defaultMinSize(minHeight = minHeight)
-                    .padding(bottom = MsgBubbleTokens.TimestampBottom)
+                    .padding(bottom = inlineBottomInset)
             ) {
                 SelectionContainer {
                     Text(

@@ -238,7 +238,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                     val showDateHeader = olderMessage == null || !isSameCalendarDay(message, olderMessage)
                     val showAvatar = !isPersonalChat && !message.isOutgoing && !isGroupedWithNewer
                     val showSenderName = !isPersonalChat && !message.isOutgoing && !isGroupedWithOlder
-                    val itemSpacing = if (isGroupedWithNewer) 2.dp else 12.dp
+                    val itemSpacing = if (isGroupedWithOlder) 2.dp else 12.dp
 
                     // Свайп по пузырю вправо выбирает сообщение для ответа.
                     MsgBubble(

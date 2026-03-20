@@ -85,6 +85,7 @@ private object AttachmentTokens {
     val IconSize = 32.dp
     val VoiceMinHeight = 44.dp
     val WaveformHeight = 20.dp
+    val CardMaxWidth = 300.dp
 }
 
 /** Отрисовывает фото-сообщение или fallback, если файл ещё не скачан. */
@@ -847,10 +848,10 @@ private fun AttachmentCard(
 ) {
     Row(
         modifier = modifier
-            .fillMaxWidth()
+            .widthIn(max = AttachmentTokens.CardMaxWidth)
             .heightIn(min = AttachmentTokens.CardMinHeight)
             .clip(RoundedCornerShape(AttachmentTokens.InnerCardRadius))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.24f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.26f))
             .then(
                 if (enabled && onClick != null) {
                     Modifier.clickable(onClick = onClick)
