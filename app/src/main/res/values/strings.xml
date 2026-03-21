@@ -6,6 +6,13 @@
     <string name="action_attach_media">Attach media</string>
     <string name="attachment_menu_location">Location</string>
     <string name="attachment_menu_file">File</string>
+    <string name="attachment_sheet_gallery_title">Gallery</string>
+    <string name="attachment_sheet_allow_media_access">Allow access</string>
+    <string name="attachment_sheet_media_permission_hint">Allow photos and videos to show the recent gallery here.</string>
+    <string name="attachment_sheet_empty">No recent media</string>
+    <string name="attachment_sheet_file_label">File</string>
+    <string name="attachment_sheet_geo_label">Geo</string>
+    <string name="attachment_sheet_video_badge">Video</string>
     <string name="action_remove_media">Remove media</string>
     <string name="message_input_placeholder">Message...</string>
     <string name="message_actions_title">Message actions</string>
@@ -22,6 +29,8 @@
     <string name="location_resolved_sending">Location resolved, sending</string>
     <string name="location_sent_success">Location sent</string>
     <string name="location_send_failed">Failed to send location</string>
+    <string name="media_permission_denied">Photos and videos permission was not granted</string>
+    <string name="media_prepare_failed">Failed to prepare media</string>
     <string name="document_prepare_failed">Failed to prepare file</string>
     <string name="document_sent_success">File sent</string>
     <string name="document_send_failed">Failed to send file</string>

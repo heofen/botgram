@@ -6,6 +6,13 @@
     <string name="action_attach_media">Прикрепить медиа</string>
     <string name="attachment_menu_location">Геолокация</string>
     <string name="attachment_menu_file">Файл</string>
+    <string name="attachment_sheet_gallery_title">Галерея</string>
+    <string name="attachment_sheet_allow_media_access">Открыть доступ</string>
+    <string name="attachment_sheet_media_permission_hint">Дай доступ к фото и видео, чтобы показать галерею прямо здесь.</string>
+    <string name="attachment_sheet_empty">Недавние фото и видео не найдены</string>
+    <string name="attachment_sheet_file_label">Файл</string>
+    <string name="attachment_sheet_geo_label">Гео</string>
+    <string name="attachment_sheet_video_badge">Видео</string>
     <string name="action_remove_media">Убрать медиа</string>
     <string name="message_input_placeholder">Сообщение...</string>
     <string name="message_actions_title">Действия с сообщением</string>
@@ -22,6 +29,8 @@
     <string name="location_resolved_sending">Геолокация получена, отправляю</string>
     <string name="location_sent_success">Геолокация отправлена</string>
     <string name="location_send_failed">Не удалось отправить геолокацию</string>
+    <string name="media_permission_denied">Разрешение на фото и видео не выдано</string>
+    <string name="media_prepare_failed">Не удалось подготовить медиа</string>
     <string name="document_prepare_failed">Не удалось подготовить файл</string>
     <string name="document_sent_success">Файл отправлен</string>
     <string name="document_send_failed">Не удалось отправить файл</string>

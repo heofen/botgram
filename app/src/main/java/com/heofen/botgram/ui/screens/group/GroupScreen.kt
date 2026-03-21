@@ -9,11 +9,11 @@ import android.database.Cursor
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -69,6 +69,8 @@ import androidx.compose.ui.unit.dp
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.R
 import com.heofen.botgram.database.tables.Message
+import com.heofen.botgram.ui.components.AttachmentGalleryItem
+import com.heofen.botgram.ui.components.AttachmentSheet
 import com.heofen.botgram.ui.components.GroupScreenBar
 import com.heofen.botgram.ui.components.MessageDateDivider
 import com.heofen.botgram.ui.components.MessageInput
@@ -109,35 +111,11 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val horizontalContentPadding = 12.dp
     var actionMessage by remember { mutableStateOf<Message?>(null) }
     var deleteMessage by remember { mutableStateOf<Message?>(null) }
+    var attachmentSheetVisible by remember { mutableStateOf(false) }
     var composerHeightPx by remember { mutableStateOf(0) }
+    var hasMediaPermission by remember { mutableStateOf(context.hasMediaAccessPermission()) }
     val messagesById = remember(uiState.messages) {
         uiState.messages.associateBy { it.messageId }
-    }
-    val mediaPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
-    ) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-
-        coroutineScope.launch {
-            val preparedMedia = withContext(Dispatchers.IO) {
-                uris.mapNotNull { uri ->
-                    prepareVisualMediaForUpload(
-                        contentResolver = context.contentResolver,
-                        cacheDir = context.cacheDir,
-                        uri = uri
-                    )
-                }
-            }
-            viewModel.addPendingMedia(
-                preparedMedia.map {
-                    ComposerMediaItem(
-                        localPath = it.localPath,
-                        mimeType = it.mimeType,
-                        fileName = it.fileName
-                    )
-                }
-            )
-        }
     }
     val documentPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -167,6 +145,14 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             context.showUploadToast(
                 if (sent) R.string.document_sent_success else R.string.document_send_failed
             )
+        }
+    }
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        hasMediaPermission = context.hasMediaAccessPermission()
+        if (!hasMediaPermission) {
+            context.showUploadToast(R.string.media_permission_denied)
         }
     }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -303,7 +289,39 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                 replySender = selectedReplySender,
                 pendingMedia = uiState.pendingMedia,
                 onTextChange = viewModel::onMessageChange,
-                onAttachmentLocationClick = {
+                onAttachmentClick = {
+                    hasMediaPermission = context.hasMediaAccessPermission()
+                    attachmentSheetVisible = true
+                },
+                onSendClick = viewModel::sendMessage,
+                onRemovePendingMedia = viewModel::removePendingMedia,
+                onCancelReply = viewModel::clearReplyMessage
+            )
+        }
+
+        if (attachmentSheetVisible) {
+            AttachmentSheet(
+                backdrop = backdrop,
+                hasMediaPermission = hasMediaPermission,
+                onDismissRequest = { attachmentSheetVisible = false },
+                onGrantMediaPermissionClick = {
+                    mediaPermissionLauncher.launch(context.requiredMediaPermissions())
+                },
+                onMediaClick = { item ->
+                    attachmentSheetVisible = false
+                    coroutineScope.launch {
+                        context.addPendingMediaFromGalleryItem(
+                            item = item,
+                            viewModel = viewModel
+                        )
+                    }
+                },
+                onFileClick = {
+                    attachmentSheetVisible = false
+                    documentPickerLauncher.launch(arrayOf("*/*"))
+                },
+                onLocationClick = {
+                    attachmentSheetVisible = false
                     if (context.hasAnyLocationPermission()) {
                         coroutineScope.launch {
                             context.sendCurrentLocationOrNotify(viewModel)
@@ -316,20 +334,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                             )
                         )
                     }
-                },
-                onAttachmentFileClick = {
-                    documentPickerLauncher.launch(arrayOf("*/*"))
-                },
-                onMediaClick = {
-                    mediaPickerLauncher.launch(
-                        PickVisualMediaRequest(
-                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
-                        )
-                    )
-                },
-                onSendClick = viewModel::sendMessage,
-                onRemovePendingMedia = viewModel::removePendingMedia,
-                onCancelReply = viewModel::clearReplyMessage
+                }
             )
         }
 
@@ -380,6 +385,37 @@ private fun Context.showUploadToast(messageResId: Int) {
     Toast.makeText(this, getString(messageResId), Toast.LENGTH_SHORT).show()
 }
 
+/** Подготавливает файл из галереи и добавляет его в pending-список композера. */
+private suspend fun Context.addPendingMediaFromGalleryItem(
+    item: AttachmentGalleryItem,
+    viewModel: GroupViewModel
+) {
+    val preparedMedia = runCatching {
+        withContext(Dispatchers.IO) {
+            prepareVisualMediaForUpload(
+                contentResolver = contentResolver,
+                cacheDir = cacheDir,
+                uri = item.contentUri
+            )
+        }
+    }.getOrNull()
+
+    if (preparedMedia == null) {
+        showUploadToast(R.string.media_prepare_failed)
+        return
+    }
+
+    viewModel.addPendingMedia(
+        listOf(
+            ComposerMediaItem(
+                localPath = preparedMedia.localPath,
+                mimeType = preparedMedia.mimeType,
+                fileName = preparedMedia.fileName
+            )
+        )
+    )
+}
+
 /** Разрешает геолокацию, отправляет координаты и сообщает пользователю результат. */
 private suspend fun Context.sendCurrentLocationOrNotify(viewModel: GroupViewModel) {
     val location = resolveCurrentLocation()
@@ -402,6 +438,53 @@ private suspend fun Context.sendCurrentLocationOrNotify(viewModel: GroupViewMode
         showLocationToast(R.string.location_sent_success)
     } else {
         showLocationToast(R.string.location_send_failed)
+    }
+}
+
+/** Возвращает runtime-permissions, достаточные для чтения фото и видео из MediaStore. */
+private fun Context.requiredMediaPermissions(): Array<String> {
+    return when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO
+        )
+
+        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+}
+
+/** Проверяет, может ли приложение показать локальную галерею внутри шторки вложений. */
+private fun Context.hasMediaAccessPermission(): Boolean {
+    return when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_VIDEO
+            ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_VIDEO
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        else -> {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        }
     }
 }
 

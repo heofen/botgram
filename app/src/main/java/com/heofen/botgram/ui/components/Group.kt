@@ -1,5 +1,9 @@
 package com.heofen.botgram.ui.components
 
+import android.graphics.Bitmap
+import android.media.ThumbnailUtils
+import android.util.Size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -24,30 +28,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -112,15 +111,12 @@ fun MessageInput(
     replySender: User? = null,
     pendingMedia: List<ComposerMediaItem> = emptyList(),
     onTextChange: (String) -> Unit,
-    onAttachmentLocationClick: () -> Unit = {},
-    onAttachmentFileClick: () -> Unit = {},
-    onMediaClick: () -> Unit = {},
+    onAttachmentClick: () -> Unit = {},
     onSendClick: () -> Unit,
     onRemovePendingMedia: (String) -> Unit = {},
     onCancelReply: () -> Unit = {}
 ) {
     val inputShape = RoundedCornerShape(27.dp)
-    var attachmentsExpanded by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -131,7 +127,7 @@ fun MessageInput(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
         ) {
             if (replyMessage != null) {
                 ReplyComposerPreview(
@@ -183,57 +179,9 @@ fun MessageInput(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                Box {
-                    IconButton(
-                        onClick = { attachmentsExpanded = true },
-                        colors = IconButtonColors(
-                            containerColor = Color.Transparent,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            disabledContainerColor = Color.Transparent,
-                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AttachFile,
-                            contentDescription = stringResource(R.string.action_open_attachments)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = attachmentsExpanded,
-                        onDismissRequest = { attachmentsExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.attachment_menu_location)) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                attachmentsExpanded = false
-                                onAttachmentLocationClick()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.attachment_menu_file)) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Description,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                attachmentsExpanded = false
-                                onAttachmentFileClick()
-                            }
-                        )
-                    }
-                }
-
                 IconButton(
-                    onClick = onMediaClick,
+                    onClick = onAttachmentClick,
+                    modifier = Modifier.size(52.dp),
                     colors = IconButtonColors(
                         containerColor = Color.Transparent,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -242,8 +190,9 @@ fun MessageInput(
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Image,
-                        contentDescription = stringResource(R.string.action_attach_media)
+                        painter = painterResource(R.drawable.ic_attachment_compose),
+                        contentDescription = stringResource(R.string.action_open_attachments),
+                        modifier = Modifier.size(30.dp)
                     )
                 }
 
@@ -294,7 +243,12 @@ private fun PendingMediaPreview(
     item: ComposerMediaItem,
     onRemove: () -> Unit
 ) {
+    val context = LocalContext.current
     val file = remember(item.localPath) { File(item.localPath) }
+    val videoThumbnail = rememberVideoThumbnail(
+        file = file,
+        enabled = item.mimeType.startsWith("video/")
+    )
 
     Box(
         modifier = Modifier
@@ -302,12 +256,21 @@ private fun PendingMediaPreview(
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.34f))
     ) {
-        AsyncImage(
-            model = file,
-            contentDescription = item.fileName,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        if (videoThumbnail != null) {
+            Image(
+                bitmap = videoThumbnail.asImageBitmap(),
+                contentDescription = item.fileName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            AsyncImage(
+                model = file,
+                contentDescription = item.fileName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
 
         if (item.mimeType.startsWith("video/")) {
             Box(
@@ -345,6 +308,33 @@ private fun PendingMediaPreview(
             )
         }
     }
+}
+
+@Composable
+private fun rememberVideoThumbnail(
+    file: File,
+    enabled: Boolean,
+    sizePx: Int = 512
+): Bitmap? {
+    val context = LocalContext.current
+    val thumbnailState = produceState<Bitmap?>(
+        initialValue = null,
+        context,
+        file.absolutePath,
+        enabled,
+        sizePx
+    ) {
+        value = if (!enabled) {
+            null
+        } else {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    ThumbnailUtils.createVideoThumbnail(file, Size(sizePx, sizePx), null)
+                }.getOrNull()
+            }
+        }
+    }
+    return thumbnailState.value
 }
 
 /** Превью сообщения, на которое пользователь сейчас отвечает. */
@@ -519,9 +509,7 @@ private fun MessageInputPreview() {
             backdrop = backdrop,
             pendingMedia = emptyList(),
             onTextChange = {},
-            onAttachmentLocationClick = {},
-            onAttachmentFileClick = {},
-            onMediaClick = {},
+            onAttachmentClick = {},
             onSendClick = {},
             onRemovePendingMedia = {}
         )
