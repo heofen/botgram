@@ -288,7 +288,7 @@ Visual style:
 
 - Material 3
 - Compose-only UI
-- `Haze` is used for blurred top bar/source effects
+- `AndroidLiquidGlass` (`Backdrop`) is used for liquid-glass top bar/source effects
 
 ## Persistence of Authentication
 
@@ -336,7 +336,7 @@ Important stack from the current build:
 - Navigation Compose
 - OkHttp/Ktor dependencies
 - Coil
-- Haze
+- AndroidLiquidGlass / Backdrop
 
 Notable detail: some libraries are present but not visibly used everywhere yet, especially `Koin`.
 

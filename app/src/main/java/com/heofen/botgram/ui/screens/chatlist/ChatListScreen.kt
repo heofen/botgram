@@ -21,7 +21,6 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -29,8 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.heofen.botgram.ui.components.ChatCell
 import com.heofen.botgram.ui.components.ChatListScreenBar
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import com.heofen.botgram.ui.theme.botgramBackdropSource
+import com.heofen.botgram.ui.theme.rememberBotgramBackdrop
 import kotlinx.coroutines.launch
 
 /** Экран списка чатов с боковым меню и строкой поиска. */
@@ -41,7 +40,7 @@ fun ChatListScreen(
     onLogOut: () -> Unit
 ) {
     val chats by viewModel.chatListState.collectAsState(initial = emptyList())
-    val hazeState = remember { HazeState() }
+    val backdrop = rememberBotgramBackdrop()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val isSearchActive by viewModel.isSearchActive.collectAsState()
@@ -85,7 +84,7 @@ fun ChatListScreen(
             topBar = {
                 ChatListScreenBar(
                     title = "Botgram",
-                    hazeState = hazeState,
+                    backdrop = backdrop,
                     isSearchActive = isSearchActive,
                     searchQuery = searchQuery,
                     onQueryChange = viewModel::onSearchQueryChange,
@@ -97,7 +96,7 @@ fun ChatListScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(state = hazeState)
+                    .botgramBackdropSource(backdrop)
             ) {
                 LazyColumn(
                     modifier = Modifier

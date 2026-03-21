@@ -63,7 +63,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.androidx.room)
     ksp(libs.androidx.room.compiler)
-    implementation(libs.haze)
+    implementation(libs.backdrop)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation(libs.ktor.client.okhttp)
