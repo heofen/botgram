@@ -51,11 +51,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,6 +74,7 @@ import com.heofen.botgram.ui.components.MessageDateDivider
 import com.heofen.botgram.ui.components.MessageInput
 import com.heofen.botgram.ui.components.MsgBubble
 import com.heofen.botgram.ui.components.MsgBubbleClusterPosition
+import com.heofen.botgram.ui.components.rememberVoiceMessagePlaybackState
 import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.ui.theme.botgramBackdropSource
 import com.heofen.botgram.ui.theme.rememberBotgramBackdrop
@@ -102,6 +104,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val backdrop = rememberBotgramBackdrop()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val voicePlaybackState = rememberVoiceMessagePlaybackState()
     val density = LocalDensity.current
     val horizontalContentPadding = 12.dp
     var actionMessage by remember { mutableStateOf<Message?>(null) }
@@ -180,6 +183,12 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val selectedReplyMessage = uiState.replyToMessageId?.let(messagesById::get)
     val selectedReplySender = selectedReplyMessage?.senderId?.let { uiState.users[it] }
 
+    DisposableEffect(voicePlaybackState) {
+        onDispose {
+            voicePlaybackState.release()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -253,6 +262,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                         showAvatar = showAvatar,
                         showSenderName = showSenderName,
                         clusterPosition = clusterPosition,
+                        voicePlaybackState = voicePlaybackState,
                         onClick = { actionMessage = message }
                     )
 

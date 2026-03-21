@@ -9,10 +9,12 @@ import android.util.Log
 import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -38,10 +40,10 @@ import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.ContactPage
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,14 +54,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -83,8 +87,12 @@ private object AttachmentTokens {
     val InnerCardPadding = 10.dp
     val CardMinHeight = 52.dp
     val IconSize = 32.dp
-    val VoiceMinHeight = 44.dp
-    val WaveformHeight = 20.dp
+    val MediaPlayButtonSize = 54.dp
+    val VoiceContentWidth = 190.dp
+    val VoiceButtonSize = 44.dp
+    val VoiceRowHeight = 44.dp
+    val VoiceTrackHeight = 14.dp
+    val VoiceFooterSpacing = 6.dp
     val CardMaxWidth = 300.dp
 }
 
@@ -113,7 +121,7 @@ fun MediaMessage(
                     model = file,
                     contentDescription = label,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+                    contentScale = ContentScale.Crop
                 )
             } else {
                 MediaPlaceholder(
@@ -121,16 +129,6 @@ fun MediaMessage(
                     label = label
                 )
             }
-        },
-        bottomStartContent = {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(10.dp)
-            )
         },
         bottomEndContent = {
             if (showMetaOverlay) {
@@ -253,72 +251,186 @@ fun AudioMessage(
     }
 }
 
-/** Отображает голосовое сообщение в виде карточки с псевдо-волной. */
+/** Отображает голосовое сообщение в компактном виде, как в Telegram-пузыре. */
 @Composable
 fun VoiceMessage(
     msg: Message,
+    playbackState: VoiceMessagePlaybackState?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val file = msg.fileLocalPath?.let(::File)
+    val hasLocalFile = file.existsOnDisk()
+    val isActive = playbackState?.isActive(msg) == true
+    val isPlaying = isActive && playbackState?.isPlaying == true
+    val isBuffering = isActive && playbackState?.isBuffering == true
+    val playbackProgress = if (isActive) playbackState?.progressFor(msg) ?: 0f else 0f
+    val elapsedSeconds = if (isActive) playbackState?.elapsedSecondsFor(msg) ?: 0L else 0L
+    val bubbleTint = if (msg.isOutgoing) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val footerColor = Color.White.copy(alpha = 0.82f)
+    val durationLabel = when {
+        isActive && elapsedSeconds > 0L -> formatDuration(elapsedSeconds)
+        hasLocalFile -> formatDuration(msg.duration).ifBlank { "00:00" }
+        msg.fileId != null -> "Loading..."
+        else -> "Unavailable"
+    }
 
-    AttachmentCard(
-        modifier = modifier,
-        enabled = file.existsOnDisk(),
-        onClick = { openMessageFile(context, file, "audio/*") }
+    Row(
+        modifier = modifier
+            .width(AttachmentTokens.VoiceContentWidth)
+            .height(AttachmentTokens.VoiceRowHeight),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        AttachmentIconBox(
-            size = AttachmentTokens.IconSize,
-            backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        Box(
+            modifier = Modifier
+                .size(AttachmentTokens.VoiceButtonSize)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = if (hasLocalFile) 1f else 0.58f))
+                .clickable(enabled = hasLocalFile) {
+                    if (playbackState != null) {
+                        playbackState.toggle(msg)
+                    } else {
+                        openMessageFile(context, file, "audio/*")
+                    }
+                },
+            contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Play voice message",
-                tint = MaterialTheme.colorScheme.primary
-            )
+            when {
+                isBuffering -> CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = bubbleTint
+                )
+
+                isPlaying -> Icon(
+                    imageVector = Icons.Default.Pause,
+                    contentDescription = "Pause voice message",
+                    tint = bubbleTint,
+                    modifier = Modifier.size(20.dp)
+                )
+
+                else -> Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Play voice message",
+                    tint = bubbleTint,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Column(
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = AttachmentTokens.VoiceMinHeight),
-            verticalArrangement = Arrangement.SpaceBetween
+                .height(AttachmentTokens.VoiceRowHeight),
+            verticalArrangement = Arrangement.Center
         ) {
-            VoiceWaveform(
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 2.dp)
+            VoiceProgressBar(
+                progress = playbackProgress,
+                isActive = isActive,
+                enabled = hasLocalFile,
+                onSeek = { fraction ->
+                    playbackState?.seekToFraction(msg, fraction)
+                }
             )
-            Text(
-                text = formatDuration(msg.duration),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(modifier = Modifier.height(AttachmentTokens.VoiceFooterSpacing))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = durationLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 11.sp
+                    ),
+                    color = footerColor
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                MessageMetaContent(
+                    msg = msg,
+                    color = footerColor
+                )
+            }
         }
     }
 }
 
-/** Декоративная звуковая волна для карточки голосового сообщения. */
+/** Линейный индикатор проигрывания голосового сообщения. */
 @Composable
-private fun VoiceWaveform(
-    color: Color,
+private fun VoiceProgressBar(
+    progress: Float,
+    isActive: Boolean,
+    enabled: Boolean,
+    onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val barHeights = listOf(10, 18, 12, 20, 14, 16, 8, 18, 12, 16, 9, 14)
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    val hasProgressMarker = isActive && clampedProgress > 0f
+    val activeTrackColor = Color.White
+    val passedTrackColor = Color.White.copy(alpha = 0.35f)
+    val inactiveTrackColor = Color.White.copy(alpha = if (enabled) 0.92f else 0.42f)
+    val handleColor = Color.White.copy(alpha = 0.58f)
 
-    Row(
-        modifier = modifier.height(AttachmentTokens.WaveformHeight),
-        verticalAlignment = Alignment.CenterVertically
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(AttachmentTokens.VoiceTrackHeight)
+            .pointerInput(enabled, isActive, onSeek) {
+                if (!enabled || !isActive) return@pointerInput
+
+                detectTapGestures { offset ->
+                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                    onSeek(fraction)
+                }
+            }
     ) {
-        barHeights.forEach { height ->
-            Box(
-                modifier = Modifier
-                    .padding(end = 2.dp)
-                    .width(3.dp)
-                    .height(height.dp)
-                    .clip(RoundedCornerShape(50.dp))
-                    .background(color.copy(alpha = 0.58f))
+        val strokeWidth = size.height * 0.42f
+        val centerY = size.height / 2f
+        val startX = strokeWidth / 2f
+        val endX = size.width - strokeWidth / 2f
+
+        if (!hasProgressMarker) {
+            drawLine(
+                color = inactiveTrackColor,
+                start = Offset(startX, centerY),
+                end = Offset(endX, centerY),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
             )
+            return@Canvas
         }
+
+        val progressX = startX + (endX - startX) * clampedProgress
+
+        drawLine(
+            color = passedTrackColor,
+            start = Offset(startX, centerY),
+            end = Offset(progressX, centerY),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = activeTrackColor,
+            start = Offset(progressX, centerY),
+            end = Offset(endX, centerY),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+        val handleWidth = size.height * 0.22f
+        val handleHeight = size.height
+        drawRoundRect(
+            color = handleColor,
+            topLeft = Offset(progressX - handleWidth / 2f, centerY - handleHeight / 2f),
+            size = androidx.compose.ui.geometry.Size(handleWidth, handleHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                x = handleWidth / 2f,
+                y = handleWidth / 2f
+            )
+        )
     }
 }
 
@@ -514,7 +626,6 @@ fun VideoMessage(
     showMetaOverlay: Boolean = false
 ) {
     val file = msg.fileLocalPath?.let(::File)
-    val duration = formatDuration(msg.duration).takeIf { it.isNotBlank() }
     val renderMode = remember(msg.type, file?.path) {
         resolveAnimatedPreviewMode(msg.type, file)
     }
@@ -534,53 +645,45 @@ fun VideoMessage(
                 }
 
                 file.existsOnDisk() && renderMode == InlinePreviewMode.VIDEO -> {
-                    InlineVideoContent(
-                        file = file!!,
-                        autoplay = msg.type == MessageType.ANIMATION || !videoHasAudio(file)
-                    )
-                }
-
-                else -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.32f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayCircle,
-                                contentDescription = label,
-                                tint = Color.White,
-                                modifier = Modifier.size(40.dp)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        InlineVideoContent(
+                            file = file!!,
+                            autoplay = msg.type == MessageType.ANIMATION || !videoHasAudio(file)
+                        )
+                        if (msg.type == MessageType.VIDEO) {
+                            CenteredVideoPlayButton(
+                                label = label,
+                                modifier = Modifier.align(Alignment.Center)
                             )
                         }
                     }
                 }
-            }
-        },
-        bottomStartContent = {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = label,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = duration ?: "Tap to open",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
+                else -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (msg.type == MessageType.VIDEO) {
+                            CenteredVideoPlayButton(label = label)
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.32f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayCircle,
+                                    contentDescription = label,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         },
         bottomEndContent = {
@@ -594,6 +697,32 @@ fun VideoMessage(
             }
         }
     )
+}
+
+@Composable
+private fun CenteredVideoPlayButton(
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(AttachmentTokens.MediaPlayButtonSize)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.42f))
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.24f),
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = label,
+            tint = Color.White,
+            modifier = Modifier.size(28.dp)
+        )
+    }
 }
 
 /** Проигрывает GIF-анимацию через Coil. */
@@ -618,7 +747,7 @@ private fun AnimatedGifContent(file: File) {
             model = file,
             contentDescription = "GIF",
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
+            contentScale = ContentScale.Crop
         )
         return
     }
@@ -634,7 +763,7 @@ private fun AnimatedGifContent(file: File) {
         ),
         contentDescription = "GIF",
         modifier = Modifier.fillMaxSize(),
-        contentScale = ContentScale.Fit
+        contentScale = ContentScale.Crop
     )
 }
 
@@ -772,7 +901,7 @@ private fun openMessageFile(
     }
 }
 
-/** Общий контейнер для визуальных медиа-вложений с градиентом и оверлеями. */
+/** Общий контейнер для визуальных медиа-вложений. */
 @Composable
 private fun MediaFrame(
     file: File?,
@@ -797,17 +926,6 @@ private fun MediaFrame(
             }
     ) {
         content()
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.48f))
-                    )
-                )
-        )
-
         bottomStartContent()
         bottomEndContent()
     }

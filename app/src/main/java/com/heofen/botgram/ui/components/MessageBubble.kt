@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -84,6 +85,16 @@ private object MsgBubbleTokens {
     val AttachmentBottomReserve = 28.dp
     val InlineMetaGap = 4.dp
     val SingleLineBottomInset = 2.dp
+    val VisualMediaMetaGap = 2.dp
+    val VisualMediaMetaHorizontalPadding = 7.dp
+    val VisualMediaMetaVerticalPadding = 2.dp
+    val VisualMediaMetaCornerRadius = 7.dp
+    val VisualMediaFooterHorizontalPadding = 8.dp
+    val VisualMediaFooterTopPadding = 7.dp
+    val VisualMediaFooterMetaEnd = 8.dp
+    val VisualMediaFooterMetaBottom = 7.dp
+    val VisualMediaFooterTextToMetaGap = 4.dp
+    val VisualMediaFooterMinHeight = 26.dp
 }
 
 /** Разделитель по дате между сообщениями разных календарных дней. */
@@ -141,15 +152,17 @@ fun MsgBubble(
     showAvatar: Boolean = !isPersonalMsg && !msg.isOutgoing,
     showSenderName: Boolean = !isPersonalMsg && !msg.isOutgoing,
     clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single,
+    voicePlaybackState: VoiceMessagePlaybackState? = null,
     onClick: (() -> Unit)? = null
 ) {
-    val showChrome = !msg.type.isDetachedBubble()
     val isMediaBubble = msg.type.isRichMediaBubble()
     val isVisualMediaBubble = msg.type.isVisualMediaBubble()
     val hasBodyText = when (msg.type) {
         MessageType.TEXT -> !msg.text.isNullOrBlank()
         else -> !msg.caption.isNullOrBlank()
     }
+    val showStandaloneVisualMedia = isVisualMediaBubble && !hasBodyText && msg.replyMsgId == null
+    val showChrome = !msg.type.isDetachedBubble() && !showStandaloneVisualMedia
     val showMediaMetaOverlay = isVisualMediaBubble && !hasBodyText
     val bodyHorizontalPadding = if (showChrome) MsgBubbleTokens.BubbleHorizontalPadding else 4.dp
     val bodyTopPadding = if (showChrome && msg.replyMsgId == null && !isMediaBubble) {
@@ -172,6 +185,7 @@ fun MsgBubble(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val showBubbleBorder = showChrome && msg.type != MessageType.VOICE
     val bubbleShape = remember(msg.isOutgoing, clusterPosition, showChrome) {
         msgBubbleShape(
             isOutgoing = msg.isOutgoing,
@@ -229,10 +243,16 @@ fun MsgBubble(
                             if (showChrome) {
                                 Modifier
                                     .background(containerColor)
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
-                                        shape = bubbleShape
+                                    .then(
+                                        if (showBubbleBorder) {
+                                            Modifier.border(
+                                                width = 1.dp,
+                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
+                                                shape = bubbleShape
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
                                     )
                             } else {
                                 Modifier
@@ -254,9 +274,11 @@ fun MsgBubble(
                         showMediaMetaOverlay = showMediaMetaOverlay,
                         bodyHorizontalPadding = bodyHorizontalPadding,
                         bodyTopPadding = bodyTopPadding,
+                        containerColor = containerColor,
                         contentColor = contentColor,
                         metaColor = metaColor,
-                        mediaShape = mediaShape
+                        mediaShape = mediaShape,
+                        voicePlaybackState = voicePlaybackState
                     )
                 }
             }
@@ -296,9 +318,11 @@ private fun MessageBubbleContent(
     showMediaMetaOverlay: Boolean,
     bodyHorizontalPadding: Dp,
     bodyTopPadding: Dp,
+    containerColor: Color,
     contentColor: Color,
     metaColor: Color,
-    mediaShape: RoundedCornerShape
+    mediaShape: RoundedCornerShape,
+    voicePlaybackState: VoiceMessagePlaybackState?
 ) {
     val replyPadding = Modifier.padding(
         start = if (showChrome) 12.dp else 4.dp,
@@ -323,9 +347,11 @@ private fun MessageBubbleContent(
                     showMediaMetaOverlay = showMediaMetaOverlay,
                     bodyHorizontalPadding = bodyHorizontalPadding,
                     bodyTopPadding = bodyTopPadding,
+                    containerColor = containerColor,
                     contentColor = contentColor,
                     metaColor = metaColor,
-                    mediaShape = mediaShape
+                    mediaShape = mediaShape,
+                    voicePlaybackState = voicePlaybackState
                 )
             }
         )
@@ -336,9 +362,11 @@ private fun MessageBubbleContent(
             showMediaMetaOverlay = showMediaMetaOverlay,
             bodyHorizontalPadding = bodyHorizontalPadding,
             bodyTopPadding = bodyTopPadding,
+            containerColor = containerColor,
             contentColor = contentColor,
             metaColor = metaColor,
-            mediaShape = mediaShape
+            mediaShape = mediaShape,
+            voicePlaybackState = voicePlaybackState
         )
     }
 }
@@ -384,11 +412,18 @@ private fun BubbleBodyContent(
     showMediaMetaOverlay: Boolean,
     bodyHorizontalPadding: Dp,
     bodyTopPadding: Dp,
+    containerColor: Color,
     contentColor: Color,
     metaColor: Color,
-    mediaShape: RoundedCornerShape
+    mediaShape: RoundedCornerShape,
+    voicePlaybackState: VoiceMessagePlaybackState?
 ) {
-    val showPinnedMeta = !showMediaMetaOverlay && msg.type != MessageType.TEXT
+    val isVisualMediaBubble = msg.type.isVisualMediaBubble()
+    val hasCaption = msg.type != MessageType.TEXT && !msg.caption.isNullOrBlank()
+    val showPinnedMeta = !isVisualMediaBubble &&
+        !showMediaMetaOverlay &&
+        msg.type != MessageType.TEXT &&
+        msg.type != MessageType.VOICE
 
     val bodyContent: @Composable () -> Unit = {
         when (msg.type) {
@@ -413,20 +448,36 @@ private fun BubbleBodyContent(
                 }
             }
 
-            MessageType.PHOTO -> MediaMessage(
+            MessageType.PHOTO -> VisualMediaBubbleLayout(
                 msg = msg,
-                icon = Icons.Default.Image,
-                label = "Photo",
-                shape = mediaShape,
-                showMetaOverlay = showMediaMetaOverlay
+                showChrome = showChrome,
+                bubbleColor = containerColor,
+                contentColor = contentColor,
+                media = {
+                    MediaMessage(
+                        msg = msg,
+                        icon = Icons.Default.Image,
+                        label = "Photo",
+                        shape = mediaShape,
+                        showMetaOverlay = false
+                    )
+                }
             )
 
             MessageType.VIDEO,
-            MessageType.ANIMATION -> VideoMessage(
+            MessageType.ANIMATION -> VisualMediaBubbleLayout(
                 msg = msg,
-                label = if (msg.type == MessageType.ANIMATION) "GIF" else "Video",
-                shape = mediaShape,
-                showMetaOverlay = showMediaMetaOverlay
+                showChrome = showChrome,
+                bubbleColor = containerColor,
+                contentColor = contentColor,
+                media = {
+                    VideoMessage(
+                        msg = msg,
+                        label = if (msg.type == MessageType.ANIMATION) "GIF" else "Video",
+                        shape = mediaShape,
+                        showMetaOverlay = false
+                    )
+                }
             )
 
             MessageType.VIDEO_NOTE -> VideoNoteMessage(msg)
@@ -438,7 +489,11 @@ private fun BubbleBodyContent(
 
             MessageType.VOICE -> VoiceMessage(
                 msg = msg,
-                modifier = Modifier.padding(horizontal = MsgBubbleTokens.AttachmentBubblePadding)
+                playbackState = voicePlaybackState,
+                modifier = Modifier.padding(
+                    horizontal = MsgBubbleTokens.AttachmentBubblePadding,
+                    vertical = MsgBubbleTokens.BubbleVerticalPadding
+                )
             )
 
             MessageType.DOCUMENT -> DocumentMessage(
@@ -472,7 +527,7 @@ private fun BubbleBodyContent(
             }
         }
 
-        if (msg.type != MessageType.TEXT && !msg.caption.isNullOrBlank()) {
+        if (!isVisualMediaBubble && msg.type != MessageType.TEXT && hasCaption) {
             Spacer(modifier = Modifier.height(MsgBubbleTokens.CaptionTopSpacing))
             CaptionTextBlock(
                 text = msg.caption,
@@ -514,6 +569,79 @@ private fun BubbleBodyContent(
 }
 
 @Composable
+private fun VisualMediaBubbleLayout(
+    msg: Message,
+    showChrome: Boolean,
+    bubbleColor: Color,
+    contentColor: Color,
+    media: @Composable () -> Unit
+) {
+    val hasCaption = !msg.caption.isNullOrBlank()
+
+    Column(modifier = Modifier.wrapContentWidth()) {
+        media()
+        when {
+            hasCaption -> {
+                MediaCaptionFooter(
+                    msg = msg,
+                    text = msg.caption.orEmpty(),
+                    textColor = contentColor,
+                    metaColor = visualMediaMetaColor(bubbleColor, contentColor)
+                )
+            }
+
+            showChrome -> {
+                MediaMetaFooter(
+                    msg = msg,
+                    metaColor = visualMediaMetaColor(bubbleColor, contentColor)
+                )
+            }
+
+            else -> {
+                Spacer(modifier = Modifier.height(MsgBubbleTokens.VisualMediaMetaGap))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    DetachedMediaMetaPill(
+                        msg = msg,
+                        backgroundColor = bubbleColor,
+                        contentColor = visualMediaMetaColor(bubbleColor, contentColor),
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaMetaFooter(
+    msg: Message,
+    metaColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MsgBubbleTokens.VisualMediaFooterMinHeight)
+    ) {
+        Text(
+            text = formatMessageTime(msg.timestamp),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            ),
+            color = metaColor,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    top = MsgBubbleTokens.VisualMediaFooterTopPadding,
+                    end = MsgBubbleTokens.VisualMediaFooterMetaEnd,
+                    bottom = MsgBubbleTokens.VisualMediaFooterMetaBottom
+                )
+        )
+    }
+}
+
+@Composable
 private fun CaptionTextBlock(
     text: String,
     textStyle: TextStyle,
@@ -529,6 +657,57 @@ private fun CaptionTextBlock(
                 end = MsgBubbleTokens.TimestampReservedWidth,
                 bottom = MsgBubbleTokens.TimestampReservedHeight
             )
+        )
+    }
+}
+
+@Composable
+private fun MediaCaptionFooter(
+    msg: Message,
+    text: String,
+    textColor: Color,
+    metaColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MsgBubbleTokens.VisualMediaFooterMinHeight)
+            .padding(
+                start = MsgBubbleTokens.VisualMediaFooterHorizontalPadding,
+                end = MsgBubbleTokens.VisualMediaFooterHorizontalPadding,
+                top = MsgBubbleTokens.VisualMediaFooterTopPadding
+            )
+    ) {
+        SelectionContainer {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp
+                ),
+                color = textColor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        end = MsgBubbleTokens.TimestampReservedWidth,
+                        bottom = MsgBubbleTokens.VisualMediaFooterMetaBottom
+                    )
+            )
+        }
+        Text(
+            text = formatMessageTime(msg.timestamp),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            ),
+            color = metaColor,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = MsgBubbleTokens.VisualMediaFooterMetaEnd,
+                    bottom = MsgBubbleTokens.VisualMediaFooterMetaBottom
+                )
         )
     }
 }
@@ -711,7 +890,7 @@ private fun buildMessageMetaLabel(msg: Message): String {
 
 /** Отрисовывает компактный блок времени и статуса отправки. */
 @Composable
-private fun MessageMetaContent(
+internal fun MessageMetaContent(
     msg: Message,
     color: Color,
     modifier: Modifier = Modifier
@@ -774,6 +953,30 @@ internal fun MediaMetaBadge(
             )
         }
     }
+}
+
+@Composable
+private fun DetachedMediaMetaPill(
+    msg: Message,
+    backgroundColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = formatMessageTime(msg.timestamp),
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium
+        ),
+        color = contentColor,
+        modifier = modifier
+            .clip(RoundedCornerShape(MsgBubbleTokens.VisualMediaMetaCornerRadius))
+            .background(backgroundColor)
+            .padding(
+                horizontal = MsgBubbleTokens.VisualMediaMetaHorizontalPadding,
+                vertical = MsgBubbleTokens.VisualMediaMetaVerticalPadding
+            )
+    )
 }
 
 /** Превью сообщения, на которое сделан ответ. */
@@ -854,8 +1057,8 @@ private fun mediaContentShape(
     hasContentAbove: Boolean,
     hasContentBelow: Boolean
 ): RoundedCornerShape {
-    val large = 10.dp
-    val inner = 2.dp
+    val large = 12.dp
+    val inner = 3.dp
     return RoundedCornerShape(
         topStart = if (hasContentAbove) inner else large,
         topEnd = if (hasContentAbove) inner else large,
@@ -895,6 +1098,15 @@ private fun formatMessageTime(timestamp: Long): String {
     val instant = Instant.ofEpochMilli(timestamp)
     val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
     return dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+}
+
+private fun visualMediaMetaColor(
+    bubbleColor: Color,
+    contentColor: Color
+): Color = if (bubbleColor.luminance() > 0.60f) {
+    contentColor.copy(alpha = 0.45f)
+} else {
+    Color.White.copy(alpha = 0.82f)
 }
 
 /** Возвращает отображаемое имя пользователя с fallback-значением. */
