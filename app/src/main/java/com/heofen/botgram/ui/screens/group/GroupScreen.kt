@@ -74,8 +74,8 @@ import com.heofen.botgram.ui.components.MessageInput
 import com.heofen.botgram.ui.components.MsgBubble
 import com.heofen.botgram.ui.components.MsgBubbleClusterPosition
 import com.heofen.botgram.ui.theme.BotgramTheme
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import com.heofen.botgram.ui.theme.botgramBackdropSource
+import com.heofen.botgram.ui.theme.rememberBotgramBackdrop
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -99,7 +99,7 @@ import kotlin.coroutines.resume
 @Composable
 fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
-    val hazeState = remember { HazeState() }
+    val backdrop = rememberBotgramBackdrop()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -202,7 +202,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
 
             LazyColumn(
                 modifier = Modifier
-                    .hazeSource(state = hazeState)
+                    .botgramBackdropSource(backdrop)
                     .imePadding()
                     .fillMaxSize(),
                 reverseLayout = true,
@@ -273,7 +273,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
         uiState.chat?.let { chat ->
             GroupScreenBar(
                 chat = chat,
-                hazeState = hazeState,
+                backdrop = backdrop,
                 onBackClick = onBackClick
             )
         }
@@ -288,7 +288,7 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             MessageInput(
                 modifier = Modifier.onSizeChanged { composerHeightPx = it.height },
                 text = uiState.messageText,
-                hazeState = hazeState,
+                backdrop = backdrop,
                 replyMessage = selectedReplyMessage,
                 replySender = selectedReplySender,
                 pendingMedia = uiState.pendingMedia,

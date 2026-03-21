@@ -1,7 +1,6 @@
 package com.heofen.botgram.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
@@ -65,10 +64,10 @@ import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
 import com.heofen.botgram.ui.screens.group.ComposerMediaItem
 import com.heofen.botgram.ui.theme.BotgramTheme
-import com.heofen.botgram.ui.theme.botgramHazeStyle
+import com.heofen.botgram.ui.theme.BotgramBackdrop
+import com.heofen.botgram.ui.theme.botgramLiquidGlass
+import com.heofen.botgram.ui.theme.rememberBotgramBackdrop
 import com.heofen.botgram.utils.extensions.getInitials
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import java.io.File
 
 /** Отрисовывает аватар пользователя или fallback по инициалам. */
@@ -108,7 +107,7 @@ fun UserAvatar(
 fun MessageInput(
     modifier: Modifier = Modifier,
     text: String,
-    hazeState: HazeState,
+    backdrop: BotgramBackdrop,
     replyMessage: Message? = null,
     replySender: User? = null,
     pendingMedia: List<ComposerMediaItem> = emptyList(),
@@ -120,20 +119,14 @@ fun MessageInput(
     onRemovePendingMedia: (String) -> Unit = {},
     onCancelReply: () -> Unit = {}
 ) {
-    val islandStyle = botgramHazeStyle()
+    val inputShape = RoundedCornerShape(27.dp)
     var attachmentsExpanded by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
-            .clip(RoundedCornerShape(27.dp))
-            .hazeEffect(state = hazeState, style = islandStyle)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(27.dp)
-            )
+            .botgramLiquidGlass(backdrop = backdrop, shape = inputShape)
     ) {
         Column(
             modifier = Modifier
@@ -415,10 +408,11 @@ private fun ReplyComposerPreview(
 @Composable
 fun GroupScreenBar(
     chat: Chat,
-    hazeState: HazeState,
+    backdrop: BotgramBackdrop,
     onBackClick: () -> Unit = {}
 ) {
-    val islandStyle = botgramHazeStyle()
+    val actionShape = CircleShape
+    val titleShape = RoundedCornerShape(50.dp)
 
     Box(
         modifier = Modifier
@@ -436,14 +430,8 @@ fun GroupScreenBar(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape)
-                    .hazeEffect(state = hazeState, style = islandStyle)
-                    .clickable(onClick = onBackClick)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(50.dp)
-                    ),
+                    .botgramLiquidGlass(backdrop = backdrop, shape = actionShape)
+                    .clickable(onClick = onBackClick),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -457,13 +445,7 @@ fun GroupScreenBar(
             Box(
                 modifier = Modifier
                     .weight(1f, fill = false)
-                    .clip(RoundedCornerShape(50))
-                    .hazeEffect(state = hazeState, style = islandStyle)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(50.dp)
-                    )
+                    .botgramLiquidGlass(backdrop = backdrop, shape = titleShape)
                     .padding(horizontal = 20.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -482,13 +464,7 @@ fun GroupScreenBar(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(50.dp)
-                    )
-                    .hazeEffect(state = hazeState, style = islandStyle),
+                    .botgramLiquidGlass(backdrop = backdrop, shape = actionShape),
                 contentAlignment = Alignment.Center
             ) {
                 ChatAvatar(
@@ -522,12 +498,12 @@ fun GroupScreenBarPreview() {
         avatarFileUniqueId = null,
         avatarLocalPath = null
     )
-    val hazeState = remember { HazeState() }
+    val backdrop = rememberBotgramBackdrop()
 
     BotgramTheme {
         GroupScreenBar(
             chat = chat,
-            hazeState = hazeState
+            backdrop = backdrop
         )
     }
 }
@@ -535,12 +511,12 @@ fun GroupScreenBarPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun MessageInputPreview() {
-    val hazeState = remember { HazeState() }
+    val backdrop = rememberBotgramBackdrop()
 
     BotgramTheme {
         MessageInput(
             text = "",
-            hazeState = hazeState,
+            backdrop = backdrop,
             pendingMedia = emptyList(),
             onTextChange = {},
             onAttachmentLocationClick = {},

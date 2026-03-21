@@ -1,7 +1,6 @@
 package com.heofen.botgram.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,10 +43,9 @@ import com.heofen.botgram.MessageType
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.ChatListItem
 import com.heofen.botgram.ui.theme.BotgramTheme
-import com.heofen.botgram.ui.theme.botgramHazeStyle
+import com.heofen.botgram.ui.theme.BotgramBackdrop
+import com.heofen.botgram.ui.theme.botgramLiquidGlass
 import com.heofen.botgram.utils.extensions.getInitials
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -85,18 +83,19 @@ fun ChatAvatar(
     }
 }
 
-/** Верхняя панель списка чатов с меню, поиском и haze-эффектом. */
+/** Верхняя панель списка чатов с меню, поиском и liquid-glass эффектом. */
 @Composable
 fun ChatListScreenBar(
     title: String,
-    hazeState: HazeState,
+    backdrop: BotgramBackdrop,
     isSearchActive: Boolean = false,
     searchQuery: String = "",
     onQueryChange: (String) -> Unit = {},
     onSearchToggle: (Boolean) -> Unit = {},
     onMenuClick: () -> Unit = {},
 ) {
-    val islandStyle = botgramHazeStyle()
+    val actionShape = CircleShape
+    val pillShape = RoundedCornerShape(50.dp)
 
     Box(
         modifier = Modifier
@@ -114,16 +113,10 @@ fun ChatListScreenBar(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape)
-                    .hazeEffect(state = hazeState, style = islandStyle)
+                    .botgramLiquidGlass(backdrop = backdrop, shape = actionShape)
                     .clickable {
                         if (isSearchActive) onSearchToggle(false) else onMenuClick()
-                    }
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(50.dp)
-                    ),
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -143,13 +136,7 @@ fun ChatListScreenBar(
                 Box(
                     modifier = Modifier
                         .then(if (isSearchActive) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-                        .clip(RoundedCornerShape(50))
-                        .hazeEffect(state = hazeState, style = islandStyle)
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(50.dp)
-                        )
+                        .botgramLiquidGlass(backdrop = backdrop, shape = pillShape)
                         .clickable(enabled = !isSearchActive) {
                         }
                         .padding(horizontal = 20.dp, vertical = 10.dp),
@@ -200,20 +187,14 @@ fun ChatListScreenBar(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape)
-                    .hazeEffect(state = hazeState, style = islandStyle)
+                    .botgramLiquidGlass(backdrop = backdrop, shape = actionShape)
                     .clickable {
                         if (isSearchActive) {
                             if (searchQuery.isNotEmpty()) onQueryChange("") else onSearchToggle(false)
                         } else {
                             onSearchToggle(true)
                         }
-                    }
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(50.dp)
-                    ),
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
