@@ -3,6 +3,9 @@ package com.heofen.botgram.ui.components
 import android.graphics.Bitmap
 import android.media.ThumbnailUtils
 import android.util.Size
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -27,12 +31,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonColors
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -116,99 +120,130 @@ fun MessageInput(
     onRemovePendingMedia: (String) -> Unit = {},
     onCancelReply: () -> Unit = {}
 ) {
-    val inputShape = RoundedCornerShape(27.dp)
+    val inputShape = RoundedCornerShape(30.dp)
+    val textStyle = MaterialTheme.typography.bodyLarge.copy(
+        color = MaterialTheme.colorScheme.onSurface,
+        fontSize = 18.sp,
+        lineHeight = 26.sp
+    )
+    val placeholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+    val attachmentTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+    val canSend = text.isNotBlank() || pendingMedia.isNotEmpty()
+    val sendContainerColor = MaterialTheme.colorScheme.primary.copy(
+        alpha = if (canSend) 1f else 0.42f
+    )
+    val sendIconColor = MaterialTheme.colorScheme.onPrimary.copy(
+        alpha = if (canSend) 1f else 0.72f
+    )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessHigh
+                ),
+                alignment = Alignment.BottomCenter
+            )
             .botgramLiquidGlass(backdrop = backdrop, shape = inputShape)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 6.dp),
-        ) {
-            if (replyMessage != null) {
-                ReplyComposerPreview(
-                    replyMessage = replyMessage,
-                    replySender = replySender,
-                    onCancelReply = onCancelReply
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-            }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (replyMessage != null || pendingMedia.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 10.dp, top = 10.dp, end = 10.dp)
+                ) {
+                    if (replyMessage != null) {
+                        ReplyComposerPreview(
+                            replyMessage = replyMessage,
+                            replySender = replySender,
+                            onCancelReply = onCancelReply
+                        )
+                    }
 
-            if (pendingMedia.isNotEmpty()) {
-                PendingMediaStrip(
-                    items = pendingMedia,
-                    onRemove = onRemovePendingMedia
-                )
+                    if (replyMessage != null && pendingMedia.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (pendingMedia.isNotEmpty()) {
+                        PendingMediaStrip(
+                            items = pendingMedia,
+                            onRemove = onRemovePendingMedia
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 60.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .align(Alignment.CenterStart)
+                        .fillMaxWidth()
+                        .padding(start = 60.dp, top = 10.dp, end = 60.dp, bottom = 10.dp)
                         .wrapContentHeight()
                 ) {
                     if (text.isEmpty()) {
                         Text(
                             text = stringResource(R.string.message_input_placeholder),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = placeholderColor,
+                            style = textStyle
                         )
                     }
 
                     BasicTextField(
                         value = text,
                         onValueChange = onTextChange,
-                        maxLines = 6,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                        minLines = 1,
+                        maxLines = 7,
+                        textStyle = textStyle,
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .wrapContentHeight()
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                IconButton(
-                    onClick = onAttachmentClick,
-                    modifier = Modifier.size(52.dp),
-                    colors = IconButtonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledContainerColor = Color.Transparent,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 10.dp, bottom = 10.dp)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onAttachmentClick),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_attachment_compose),
                         contentDescription = stringResource(R.string.action_open_attachments),
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier.size(28.dp),
+                        tint = attachmentTint
                     )
                 }
 
-                IconButton(
-                    onClick = onSendClick,
-                    enabled = text.isNotBlank() || pendingMedia.isNotEmpty(),
-                    colors = IconButtonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        disabledContainerColor = Color.Transparent,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 10.dp, bottom = 10.dp)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(sendContainerColor)
+                        .clickable(enabled = canSend, onClick = onSendClick),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = stringResource(R.string.action_send)
+                        painter = painterResource(R.drawable.ic_message_input_send_arrow),
+                        contentDescription = stringResource(R.string.action_send),
+                        modifier = Modifier.size(20.dp),
+                        tint = sendIconColor
                     )
                 }
             }
@@ -385,10 +420,15 @@ private fun ReplyComposerPreview(
             )
         }
 
-        IconButton(onClick = onCancelReply) {
+        IconButton(
+            onClick = onCancelReply,
+            colors = IconButtonDefaults.iconButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        ) {
             Icon(
                 imageVector = Icons.Default.Close,
-                contentDescription = stringResource(R.string.action_cancel_reply)
+                contentDescription = stringResource(R.string.action_cancel_reply),
             )
         }
     }

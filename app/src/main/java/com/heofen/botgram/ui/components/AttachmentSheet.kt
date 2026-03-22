@@ -140,7 +140,7 @@ fun AttachmentSheet(
                 .botgramLiquidGlass(
                     backdrop = backdrop,
                     shape = sheetShape,
-                    blurRadius = 12.dp
+                    blurRadius = 4.dp
                 )
         ) {
             Column(
@@ -356,6 +356,9 @@ private fun AttachmentQuickActions(
     onFileClick: () -> Unit,
     onLocationClick: () -> Unit
 ) {
+    val actionIconTint = MaterialTheme.colorScheme.primary
+    val actionLabelColor = MaterialTheme.colorScheme.onSurface
+
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
@@ -366,7 +369,7 @@ private fun AttachmentQuickActions(
                 .botgramLiquidGlass(
                     backdrop = backdrop,
                     shape = RoundedCornerShape(42.dp),
-                    blurRadius = 10.dp
+                    blurRadius = 1.dp
                 )
                 .padding(horizontal = 22.dp, vertical = 9.dp),
             horizontalArrangement = Arrangement.spacedBy(28.dp),
@@ -377,11 +380,12 @@ private fun AttachmentQuickActions(
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.InsertDriveFile,
                         contentDescription = null,
-                        tint = AttachmentSheetForeground,
+                        tint = actionIconTint,
                         modifier = Modifier.size(30.dp)
                     )
                 },
                 label = stringResource(R.string.attachment_sheet_file_label),
+                labelColor = actionLabelColor,
                 onClick = onFileClick
             )
             AttachmentQuickAction(
@@ -389,11 +393,12 @@ private fun AttachmentQuickActions(
                     Icon(
                         imageVector = Icons.Outlined.LocationOn,
                         contentDescription = null,
-                        tint = AttachmentSheetForeground,
+                        tint = actionIconTint,
                         modifier = Modifier.size(30.dp)
                     )
                 },
                 label = stringResource(R.string.attachment_sheet_geo_label),
+                labelColor = actionLabelColor,
                 onClick = onLocationClick
             )
         }
@@ -404,6 +409,7 @@ private fun AttachmentQuickActions(
 private fun AttachmentQuickAction(
     icon: @Composable () -> Unit,
     label: String,
+    labelColor: Color,
     onClick: () -> Unit
 ) {
     Column(
@@ -418,7 +424,7 @@ private fun AttachmentQuickAction(
         Text(
             text = label,
             style = MaterialTheme.typography.titleSmall,
-            color = AttachmentSheetForeground
+            color = labelColor
         )
     }
 }
