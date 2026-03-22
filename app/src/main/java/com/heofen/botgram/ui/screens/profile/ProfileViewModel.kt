@@ -94,7 +94,7 @@ class ProfileViewModel(
         if (chat != null && !chatAvatarLoadRequested) {
             chatAvatarLoadRequested = true
             viewModelScope.launch(Dispatchers.IO) {
-                chatRepository.loadAvatarIfMissing(chat.id)
+                chatRepository.refreshAvatar(chat.id)
             }
         }
 
@@ -102,7 +102,7 @@ class ProfileViewModel(
         if (userId != null && !userAvatarLoadRequested) {
             userAvatarLoadRequested = true
             viewModelScope.launch(Dispatchers.IO) {
-                userRepository.loadAvatarIfMissing(userId)
+                userRepository.refreshAvatar(userId)
             }
         }
     }

@@ -2,6 +2,7 @@ package com.heofen.botgram.data.repository
 
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.MediaManager
+import com.heofen.botgram.data.remote.AvatarFetchResult
 import com.heofen.botgram.data.sync.ChatSyncStore
 import com.heofen.botgram.database.dao.ChatDao
 import com.heofen.botgram.database.tables.Chat
@@ -31,7 +32,7 @@ class ChatRepository(
     override suspend fun updateLastMessage(chatId: Long, type: MessageType?, text: String?, time: Long?, senderId: Long?) =
         chatDao.updateLastMessage(chatId, type, text, time, senderId)
 
-    suspend fun updateAvatar(
+    override suspend fun updateAvatar(
         chatId: Long,
         fileId: String?,
         fileUniqueId: String?,
@@ -46,15 +47,42 @@ class ChatRepository(
             if (File(chat.avatarLocalPath).exists()) return
         }
 
-        val avatar = mediaManager.downloadChatAvatar(chatId) ?: return
-
-        if (avatar.localPath != null) {
-            chatDao.updateAvatar(chatId, avatar.fileId, avatar.fileUniqueId, avatar.localPath)
-        }
+        refreshAvatar(chatId)
     }
 
     /** Ищет чаты по названию и имени собеседника. */
     fun searchChats(query: String): Flow<List<ChatListItem>> = chatDao.searchChatListItems(query)
+
+    /** Синхронизирует актуальный аватар чата с Telegram. */
+    override suspend fun refreshAvatar(chatId: Long): AvatarFetchResult? {
+        val current = chatDao.getById(chatId) ?: return null
+        val avatar = mediaManager.downloadChatAvatar(chatId) ?: return null
+        return applyFetchedAvatar(chatId = chatId, current = current, avatar = avatar)
+    }
+
+    private suspend fun applyFetchedAvatar(
+        chatId: Long,
+        current: Chat,
+        avatar: AvatarFetchResult
+    ): AvatarFetchResult {
+        return when (avatar) {
+            is AvatarFetchResult.Available -> {
+                val localPath = avatar.localPath
+                    ?: current.avatarLocalPath?.takeIf { current.avatarFileUniqueId == avatar.fileUniqueId }
+                chatDao.updateAvatar(chatId, avatar.fileId, avatar.fileUniqueId, localPath)
+                AvatarFetchResult.Available(
+                    fileId = avatar.fileId,
+                    fileUniqueId = avatar.fileUniqueId,
+                    localPath = localPath
+                )
+            }
+
+            AvatarFetchResult.Missing -> {
+                chatDao.updateAvatar(chatId, null, null, null)
+                AvatarFetchResult.Missing
+            }
+        }
+    }
 
     /** Сохраняет локально ценные поля, если сервер прислал неполную версию чата. */
     private suspend fun Chat.mergeStoredState(): Chat {

@@ -29,6 +29,8 @@ data class TelegramIncomingMessage(
     val isEdited: Boolean,
     val editedAt: Long?,
     val mediaGroupId: String?,
+    val chatAvatarChanged: Boolean,
+    val chatAvatarRemoved: Boolean,
     val chat: TelegramChat,
     val sender: TelegramUser?
 )

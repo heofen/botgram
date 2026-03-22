@@ -36,7 +36,9 @@ data class MessageDto(
     val document: DocumentDto?,
     val sticker: StickerDto?,
     val contact: ContactDto?,
-    val location: LocationDto?
+    val location: LocationDto?,
+    val newChatPhoto: List<PhotoSizeDto>?,
+    val deleteChatPhoto: Boolean
 )
 
 /** DTO чата Telegram. */

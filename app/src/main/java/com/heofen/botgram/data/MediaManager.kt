@@ -1,7 +1,7 @@
 package com.heofen.botgram.data
 
 import com.heofen.botgram.data.remote.TelegramGateway
-import com.heofen.botgram.data.remote.AvatarDownloadResult
+import com.heofen.botgram.data.remote.AvatarFetchResult
 
 /** Централизует скачивание файлов и аватаров через `TelegramGateway`. */
 class MediaManager(
@@ -18,12 +18,12 @@ class MediaManager(
     }
 
     /** Загружает аватар пользователя. */
-    suspend fun downloadUserAvatar(userId: Long): AvatarDownloadResult? {
+    suspend fun downloadUserAvatar(userId: Long): AvatarFetchResult? {
         return gateway.downloadUserAvatar(userId)
     }
 
     /** Загружает аватар чата. */
-    suspend fun downloadChatAvatar(chatId: Long): AvatarDownloadResult? {
+    suspend fun downloadChatAvatar(chatId: Long): AvatarFetchResult? {
         return gateway.downloadChatAvatar(chatId)
     }
 }

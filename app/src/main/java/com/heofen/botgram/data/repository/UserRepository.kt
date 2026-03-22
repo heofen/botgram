@@ -1,6 +1,7 @@
 package com.heofen.botgram.data.repository
 
 import com.heofen.botgram.data.MediaManager
+import com.heofen.botgram.data.remote.AvatarFetchResult
 import com.heofen.botgram.data.sync.UserSyncStore
 import com.heofen.botgram.database.dao.UserDao
 import com.heofen.botgram.database.tables.User
@@ -20,7 +21,7 @@ class UserRepository(
 
     suspend fun insertUser(user: User) = userDao.insert(user)
 
-    override suspend fun upsertUser(user: User) = userDao.upsert(user.mergeStoredAvatar())
+    override suspend fun upsertUser(user: User) = userDao.upsert(mergeIncomingUserWithStoredState(user, userDao.getById(user.id)))
 
     suspend fun updateAvatar(
         userId: Long,
@@ -41,22 +42,52 @@ class UserRepository(
             if (file.exists()) return
         }
 
-        val avatar = mediaManager.downloadUserAvatar(userId) ?: return
+        refreshAvatar(userId)
+    }
 
-        if (avatar.localPath != null) {
-            userDao.updateAvatar(userId, avatar.fileId, avatar.fileUniqueId, avatar.localPath)
+    /** Синхронизирует актуальный аватар пользователя с Telegram. */
+    override suspend fun refreshAvatar(userId: Long): AvatarFetchResult? {
+        val current = userDao.getById(userId) ?: return null
+        val avatar = mediaManager.downloadUserAvatar(userId) ?: return null
+        return applyFetchedAvatar(userId = userId, current = current, avatar = avatar)
+    }
+
+    private suspend fun applyFetchedAvatar(
+        userId: Long,
+        current: User,
+        avatar: AvatarFetchResult
+    ): AvatarFetchResult {
+        return when (avatar) {
+            is AvatarFetchResult.Available -> {
+                val localPath = avatar.localPath
+                    ?: current.avatarLocalPath?.takeIf { current.avatarFileUniqueId == avatar.fileUniqueId }
+                userDao.updateAvatar(userId, avatar.fileId, avatar.fileUniqueId, localPath)
+                AvatarFetchResult.Available(
+                    fileId = avatar.fileId,
+                    fileUniqueId = avatar.fileUniqueId,
+                    localPath = localPath
+                )
+            }
+
+            AvatarFetchResult.Missing -> {
+                userDao.updateAvatar(userId, null, null, null)
+                AvatarFetchResult.Missing
+            }
         }
     }
+}
 
-    /** Сохраняет уже известный локальный аватар при повторном upsert пользователя. */
-    private suspend fun User.mergeStoredAvatar(): User {
-        val current = userDao.getById(id) ?: return this
-        return copy(
-            username = username ?: current.username,
-            languageCode = languageCode ?: current.languageCode,
-            avatarFileId = avatarFileId ?: current.avatarFileId,
-            avatarFileUniqueId = avatarFileUniqueId ?: current.avatarFileUniqueId,
-            avatarLocalPath = avatarLocalPath ?: current.avatarLocalPath
-        )
-    }
+/** Сливает свежий профиль пользователя с локально ценными полями. */
+internal fun mergeIncomingUserWithStoredState(
+    incoming: User,
+    current: User?
+): User {
+    if (current == null) return incoming
+
+    return incoming.copy(
+        languageCode = incoming.languageCode ?: current.languageCode,
+        avatarFileId = incoming.avatarFileId ?: current.avatarFileId,
+        avatarFileUniqueId = incoming.avatarFileUniqueId ?: current.avatarFileUniqueId,
+        avatarLocalPath = incoming.avatarLocalPath ?: current.avatarLocalPath
+    )
 }

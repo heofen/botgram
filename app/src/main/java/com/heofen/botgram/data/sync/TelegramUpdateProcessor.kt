@@ -1,6 +1,8 @@
 package com.heofen.botgram.data.sync
 
 import com.heofen.botgram.MessageType
+import com.heofen.botgram.ChatType
+import com.heofen.botgram.data.remote.AvatarFetchResult
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
 import com.heofen.botgram.data.remote.TelegramUpdate
 import com.heofen.botgram.database.tables.Chat
@@ -12,6 +14,8 @@ import com.heofen.botgram.utils.toDbUser
 /** Контракт хранилища чатов для процессора синхронизации. */
 interface ChatSyncStore {
     suspend fun upsertChat(chat: Chat)
+    suspend fun refreshAvatar(chatId: Long): AvatarFetchResult?
+    suspend fun updateAvatar(chatId: Long, fileId: String?, fileUniqueId: String?, localPath: String?)
 
     suspend fun updateLastMessage(
         chatId: Long,
@@ -36,6 +40,7 @@ interface MessageSyncStore {
 /** Контракт хранилища пользователей для процессора синхронизации. */
 interface UserSyncStore {
     suspend fun upsertUser(user: User)
+    suspend fun refreshAvatar(userId: Long): AvatarFetchResult?
 }
 
 /** Обрабатывает входящие обновления и раскладывает их по локальным таблицам. */
@@ -59,6 +64,38 @@ class TelegramUpdateProcessor(
         val sender = message.sender?.toDbUser()
         if (sender != null) {
             userStore.upsertUser(sender)
+            val avatar = userStore.refreshAvatar(sender.id)
+            if (message.chat.type == ChatType.PRIVATE && avatar != null) {
+                when (avatar) {
+                    is AvatarFetchResult.Available -> {
+                        chatStore.updateAvatar(
+                            chatId = message.chat.id,
+                            fileId = avatar.fileId,
+                            fileUniqueId = avatar.fileUniqueId,
+                            localPath = avatar.localPath
+                        )
+                    }
+
+                    AvatarFetchResult.Missing -> {
+                        chatStore.updateAvatar(
+                            chatId = message.chat.id,
+                            fileId = null,
+                            fileUniqueId = null,
+                            localPath = null
+                        )
+                    }
+                }
+            }
+        }
+
+        when {
+            message.chatAvatarRemoved -> {
+                chatStore.updateAvatar(message.chat.id, null, null, null)
+            }
+
+            message.chatAvatarChanged -> {
+                chatStore.refreshAvatar(message.chat.id)
+            }
         }
 
         val storedMessage = messageStore.upsertRemoteMessage(

@@ -549,7 +549,9 @@ class TelegramBotApiClient(
             document = json.optJSONObject("document")?.let { parseDocument(it) },
             sticker = json.optJSONObject("sticker")?.let { parseSticker(it) },
             contact = json.optJSONObject("contact")?.let { parseContact(it) },
-            location = json.optJSONObject("location")?.let { parseLocation(it) }
+            location = json.optJSONObject("location")?.let { parseLocation(it) },
+            newChatPhoto = json.optJSONArray("new_chat_photo")?.let { parsePhotoArray(it) },
+            deleteChatPhoto = json.optBoolean("delete_chat_photo", false)
         )
     }
 

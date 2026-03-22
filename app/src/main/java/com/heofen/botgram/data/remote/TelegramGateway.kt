@@ -8,12 +8,18 @@ data class OutgoingVisualMedia(
     val mimeType: String
 )
 
-/** Результат загрузки аватара с Telegram-идентификаторами и локальным путём. */
-data class AvatarDownloadResult(
-    val fileId: String?,
-    val fileUniqueId: String?,
-    val localPath: String?
-)
+/** Состояние аватара после запроса в Telegram. */
+sealed interface AvatarFetchResult {
+    /** У сущности есть аватар, идентификаторы известны. */
+    data class Available(
+        val fileId: String,
+        val fileUniqueId: String,
+        val localPath: String?
+    ) : AvatarFetchResult
+
+    /** Аватар у сущности отсутствует. */
+    object Missing : AvatarFetchResult
+}
 
 /**
  * Абстракция над транспортом Telegram.
@@ -86,10 +92,10 @@ interface TelegramGateway {
     ): String?
 
     /** Загружает аватар пользователя. */
-    suspend fun downloadUserAvatar(userId: Long): AvatarDownloadResult?
+    suspend fun downloadUserAvatar(userId: Long): AvatarFetchResult?
 
     /** Загружает аватар чата. */
-    suspend fun downloadChatAvatar(chatId: Long): AvatarDownloadResult?
+    suspend fun downloadChatAvatar(chatId: Long): AvatarFetchResult?
 
     /** Освобождает ресурсы сетевого клиента. */
     fun close()

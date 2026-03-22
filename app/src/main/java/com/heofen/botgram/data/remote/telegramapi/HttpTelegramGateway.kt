@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
-import com.heofen.botgram.data.remote.AvatarDownloadResult
+import com.heofen.botgram.data.remote.AvatarFetchResult
 import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.remote.TelegramChat
 import com.heofen.botgram.data.remote.TelegramGateway
@@ -179,10 +179,11 @@ class HttpTelegramGateway(
         }
     }
 
-    override suspend fun downloadUserAvatar(userId: Long): AvatarDownloadResult? {
+    override suspend fun downloadUserAvatar(userId: Long): AvatarFetchResult? {
         return try {
             val photos = apiClient.getUserProfilePhotos(userId = userId, limit = 1)
-            val bestPhoto = photos.photos.firstOrNull()?.lastOrNull() ?: return null
+            val bestPhoto = photos.photos.firstOrNull()?.lastOrNull()
+                ?: return AvatarFetchResult.Missing
             val localPath = downloadFile(
                 fileId = bestPhoto.fileId,
                 fileExtension = "jpg",
@@ -190,7 +191,7 @@ class HttpTelegramGateway(
                 isAvatar = true
             )
 
-            AvatarDownloadResult(
+            AvatarFetchResult.Available(
                 fileId = bestPhoto.fileId,
                 fileUniqueId = bestPhoto.fileUniqueId,
                 localPath = localPath
@@ -211,10 +212,10 @@ class HttpTelegramGateway(
         }
     }
 
-    override suspend fun downloadChatAvatar(chatId: Long): AvatarDownloadResult? {
+    override suspend fun downloadChatAvatar(chatId: Long): AvatarFetchResult? {
         return try {
             val chat = apiClient.getChat(chatId)
-            val photo = chat.photo ?: return null
+            val photo = chat.photo ?: return AvatarFetchResult.Missing
             val localPath = downloadFile(
                 fileId = photo.bigFileId,
                 fileExtension = "jpg",
@@ -222,7 +223,7 @@ class HttpTelegramGateway(
                 isAvatar = true
             )
 
-            AvatarDownloadResult(
+            AvatarFetchResult.Available(
                 fileId = photo.bigFileId,
                 fileUniqueId = photo.bigFileUniqueId,
                 localPath = localPath
@@ -269,6 +270,8 @@ private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {
         isEdited = editDate != null,
         editedAt = editDate?.times(1000),
         mediaGroupId = mediaGroupId,
+        chatAvatarChanged = newChatPhoto != null,
+        chatAvatarRemoved = deleteChatPhoto,
         chat = TelegramChat(
             id = chat.id,
             type = chat.toChatType(),
