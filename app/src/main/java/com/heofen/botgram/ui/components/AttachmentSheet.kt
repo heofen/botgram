@@ -19,12 +19,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -63,7 +67,11 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.heofen.botgram.R
 import com.heofen.botgram.ui.theme.BotgramBackdrop
+import com.heofen.botgram.ui.theme.botgramBackdropSource
 import com.heofen.botgram.ui.theme.botgramLiquidGlass
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -93,6 +101,8 @@ fun AttachmentSheet(
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val sheetShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
+    val sheetContentBackdrop = rememberLayerBackdrop()
+    val quickActionsBackdrop = rememberCombinedBackdrop(backdrop, sheetContentBackdrop)
     var mediaItems by remember(hasMediaPermission) { mutableStateOf<List<AttachmentGalleryItem>?>(null) }
 
     LaunchedEffect(context, hasMediaPermission, canReadImages, canReadVideos) {
@@ -117,7 +127,10 @@ fun AttachmentSheet(
         shape = sheetShape,
         containerColor = Color.Transparent,
         scrimColor = Color.Black.copy(alpha = 0.52f),
-        tonalElevation = 0.dp
+        tonalElevation = 0.dp,
+        contentWindowInsets = {
+            WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+        }
     ) {
         Box(
             modifier = Modifier
@@ -131,7 +144,9 @@ fun AttachmentSheet(
                 )
         ) {
             Column(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .botgramBackdropSource(sheetContentBackdrop)
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -142,10 +157,9 @@ fun AttachmentSheet(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(26.dp))
-                            .botgramLiquidGlass(
-                                backdrop = backdrop,
-                                shape = RoundedCornerShape(26.dp),
-                                blurRadius = 8.dp
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f),
+                                shape = RoundedCornerShape(26.dp)
                             )
                     ) {
                         Text(
@@ -153,7 +167,7 @@ fun AttachmentSheet(
                             modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = AttachmentSheetForeground
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 }
@@ -214,7 +228,7 @@ fun AttachmentSheet(
             }
 
             AttachmentQuickActions(
-                backdrop = backdrop,
+                backdrop = quickActionsBackdrop,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 28.dp),
@@ -337,7 +351,7 @@ private fun rememberMediaThumbnail(uri: Uri, sizePx: Int = 512): Bitmap? {
 
 @Composable
 private fun AttachmentQuickActions(
-    backdrop: BotgramBackdrop,
+    backdrop: Backdrop,
     modifier: Modifier = Modifier,
     onFileClick: () -> Unit,
     onLocationClick: () -> Unit
@@ -348,13 +362,13 @@ private fun AttachmentQuickActions(
     ) {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(34.dp))
+                .clip(RoundedCornerShape(42.dp))
                 .botgramLiquidGlass(
                     backdrop = backdrop,
-                    shape = RoundedCornerShape(34.dp),
+                    shape = RoundedCornerShape(42.dp),
                     blurRadius = 10.dp
                 )
-                .padding(horizontal = 22.dp, vertical = 14.dp),
+                .padding(horizontal = 22.dp, vertical = 9.dp),
             horizontalArrangement = Arrangement.spacedBy(28.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -396,9 +410,9 @@ private fun AttachmentQuickAction(
         modifier = Modifier
             .clip(RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         icon()
         Text(

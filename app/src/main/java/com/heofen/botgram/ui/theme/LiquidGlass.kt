@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -35,7 +36,7 @@ fun Modifier.botgramBackdropSource(backdrop: BotgramBackdrop): Modifier =
 /** Единый liquid-glass стиль для стеклянных панелей приложения. */
 @Composable
 fun Modifier.botgramLiquidGlass(
-    backdrop: BotgramBackdrop,
+    backdrop: Backdrop,
     shape: Shape,
     blurRadius: Dp = 1.dp,
     lensEnabled: Boolean = shape is CornerBasedShape
