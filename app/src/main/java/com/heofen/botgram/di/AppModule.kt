@@ -12,6 +12,8 @@ import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.database.AppDatabase
 import com.heofen.botgram.ui.screens.chatlist.ChatListViewModel
 import com.heofen.botgram.ui.screens.group.GroupViewModel
+import com.heofen.botgram.ui.screens.profile.ProfileTarget
+import com.heofen.botgram.ui.screens.profile.ProfileViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
@@ -72,6 +74,14 @@ fun appModule(appContainer: AppContainer) = module {
             chatId = params.get(),
             chatRepository = get(),
             messageRepository = get(),
+            userRepository = get()
+        )
+    }
+    viewModel { params ->
+        ProfileViewModel(
+            target = params.get<ProfileTarget>(),
+            profileId = params.get<Long>(),
+            chatRepository = get(),
             userRepository = get()
         )
     }

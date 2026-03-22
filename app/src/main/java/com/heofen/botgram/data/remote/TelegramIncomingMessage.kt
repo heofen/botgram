@@ -52,6 +52,8 @@ data class TelegramUser(
     val id: Long,
     val firstName: String,
     val lastName: String?,
+    val username: String?,
+    val languageCode: String?,
     val bio: String?,
     val canWriteMsgToPm: Boolean
 )

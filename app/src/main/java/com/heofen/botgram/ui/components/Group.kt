@@ -439,10 +439,12 @@ private fun ReplyComposerPreview(
 fun GroupScreenBar(
     chat: Chat,
     backdrop: BotgramBackdrop,
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onAvatarClick: () -> Unit = {}
 ) {
     val actionShape = CircleShape
     val titleShape = RoundedCornerShape(50.dp)
+    val avatarClickable = chat.type == ChatType.PRIVATE
 
     Box(
         modifier = Modifier
@@ -494,12 +496,16 @@ fun GroupScreenBar(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .botgramLiquidGlass(backdrop = backdrop, shape = actionShape),
+                    .clip(actionShape)
+                    .botgramLiquidGlass(backdrop = backdrop, shape = actionShape)
+                    .clickable(enabled = avatarClickable, onClick = onAvatarClick),
                 contentAlignment = Alignment.Center
             ) {
                 ChatAvatar(
                     chat = chat,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(2.dp)
                 )
             }
         }

@@ -5,12 +5,15 @@ import com.heofen.botgram.data.sync.UserSyncStore
 import com.heofen.botgram.database.dao.UserDao
 import com.heofen.botgram.database.tables.User
 import java.io.File
+import kotlinx.coroutines.flow.Flow
 
 /** Репозиторий пользователей и их аватаров. */
 class UserRepository(
     private val userDao: UserDao,
     private val mediaManager: MediaManager
 ) : UserSyncStore {
+    fun observeById(id: Long): Flow<User?> = userDao.observeById(id)
+
     suspend fun getById(id: Long): User? = userDao.getById(id)
 
     suspend fun userExists(id: Long): Boolean = userDao.userExists(id)
@@ -49,6 +52,8 @@ class UserRepository(
     private suspend fun User.mergeStoredAvatar(): User {
         val current = userDao.getById(id) ?: return this
         return copy(
+            username = username ?: current.username,
+            languageCode = languageCode ?: current.languageCode,
             avatarFileId = avatarFileId ?: current.avatarFileId,
             avatarFileUniqueId = avatarFileUniqueId ?: current.avatarFileUniqueId,
             avatarLocalPath = avatarLocalPath ?: current.avatarLocalPath

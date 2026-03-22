@@ -569,7 +569,9 @@ class TelegramBotApiClient(
         return UserDto(
             id = json.getLong("id"),
             firstName = json.getString("first_name"),
-            lastName = json.optString("last_name").takeIf { it.isNotBlank() }
+            lastName = json.optString("last_name").takeIf { it.isNotBlank() },
+            username = json.optString("username").takeIf { it.isNotBlank() },
+            languageCode = json.optString("language_code").takeIf { it.isNotBlank() }
         )
     }
 

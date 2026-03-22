@@ -68,6 +68,8 @@ fun TelegramUser.toDbUser(): User {
         id = id,
         firstName = firstName,
         lastName = lastName,
+        username = username,
+        languageCode = languageCode,
         bio = bio,
         avatarFileId = null,
         avatarFileUniqueId = null,

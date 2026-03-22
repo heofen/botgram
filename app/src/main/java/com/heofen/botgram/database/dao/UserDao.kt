@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.heofen.botgram.database.tables.User
+import kotlinx.coroutines.flow.Flow
 
 /** DAO для пользователей и их аватаров. */
 @Dao
@@ -12,6 +13,10 @@ interface UserDao {
     /** Возвращает пользователя по идентификатору. */
     @Query("SELECT * FROM users WHERE id = :id")
     suspend fun getById(id: Long): User?
+
+    /** Наблюдает за изменениями конкретного пользователя. */
+    @Query("SELECT * FROM users WHERE id = :id")
+    fun observeById(id: Long): Flow<User?>
 
     /** Проверяет наличие пользователя в локальной базе. */
     @Query("SELECT EXISTS(SELECT * FROM users WHERE id = :userId)")

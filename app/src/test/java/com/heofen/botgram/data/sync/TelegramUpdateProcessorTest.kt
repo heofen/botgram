@@ -107,6 +107,8 @@ class TelegramUpdateProcessorTest {
                 id = 30L,
                 firstName = "Tester",
                 lastName = null,
+                username = "tester",
+                languageCode = "ru",
                 bio = null,
                 canWriteMsgToPm = true
             )

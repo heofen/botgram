@@ -17,7 +17,7 @@ import com.heofen.botgram.database.tables.User
 /** Основная Room-база приложения. */
 @Database(
     entities = [Message::class, Chat::class, User::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -38,6 +38,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Миграция, добавляющая в профиль пользователя username и languageCode. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE users ADD COLUMN username TEXT")
+                db.execSQL("ALTER TABLE users ADD COLUMN languageCode TEXT")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -48,7 +56,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "botgram_database"
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance

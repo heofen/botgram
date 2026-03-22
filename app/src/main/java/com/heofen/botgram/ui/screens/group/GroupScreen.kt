@@ -101,7 +101,12 @@ import kotlin.coroutines.resume
 
 /** Экран переписки: история сообщений, поле ввода и действия над сообщениями. */
 @Composable
-fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
+fun GroupScreen(
+    viewModel: GroupViewModel,
+    onBackClick: () -> Unit,
+    onChatProfileClick: (Long) -> Unit,
+    onUserProfileClick: (Long) -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
     val backdrop = rememberBotgramBackdrop()
     val context = LocalContext.current
@@ -249,6 +254,9 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
                         showSenderName = showSenderName,
                         clusterPosition = clusterPosition,
                         voicePlaybackState = voicePlaybackState,
+                        onAvatarClick = foundSender?.id?.let { userId ->
+                            { onUserProfileClick(userId) }
+                        },
                         onClick = { actionMessage = message }
                     )
 
@@ -270,7 +278,12 @@ fun GroupScreen(viewModel: GroupViewModel, onBackClick: () -> Unit) {
             GroupScreenBar(
                 chat = chat,
                 backdrop = backdrop,
-                onBackClick = onBackClick
+                onBackClick = onBackClick,
+                onAvatarClick = {
+                    if (chat.type == ChatType.PRIVATE) {
+                        onChatProfileClick(chat.id)
+                    }
+                }
             )
         }
 

@@ -286,6 +286,8 @@ private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {
                 id = it.id,
                 firstName = it.firstName,
                 lastName = it.lastName,
+                username = it.username,
+                languageCode = it.languageCode,
                 bio = null,
                 canWriteMsgToPm = chat.type == "private"
             )

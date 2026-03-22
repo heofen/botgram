@@ -10,6 +10,8 @@ data class User(
     val id: Long,
     val firstName: String,
     val lastName: String?,
+    val username: String?,
+    val languageCode: String?,
     val bio: String?,
 
     val avatarFileId: String?,

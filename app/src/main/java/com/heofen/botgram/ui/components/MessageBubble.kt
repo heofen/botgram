@@ -3,6 +3,7 @@ package com.heofen.botgram.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -153,6 +155,7 @@ fun MsgBubble(
     showSenderName: Boolean = !isPersonalMsg && !msg.isOutgoing,
     clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single,
     voicePlaybackState: VoiceMessagePlaybackState? = null,
+    onAvatarClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
     val isMediaBubble = msg.type.isRichMediaBubble()
@@ -218,11 +221,24 @@ fun MsgBubble(
                     contentAlignment = Alignment.BottomStart
                 ) {
                     if (showAvatar) {
-                        UserAvatar(
-                            user = sender,
-                            modifier = Modifier.size(36.dp),
-                            fallbackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .then(
+                                    if (onAvatarClick != null) {
+                                        Modifier.clickable(onClick = onAvatarClick)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            UserAvatar(
+                                user = sender,
+                                modifier = Modifier.fillMaxSize(),
+                                fallbackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -1170,6 +1186,8 @@ fun MsgBubblePreview() {
         id = 1,
         firstName = "Геннадий",
         lastName = null,
+        username = null,
+        languageCode = null,
         bio = null,
         avatarFileId = null,
         avatarFileUniqueId = null,

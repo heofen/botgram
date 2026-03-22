@@ -54,7 +54,9 @@ data class ChatDto(
 data class UserDto(
     val id: Long,
     val firstName: String,
-    val lastName: String?
+    val lastName: String?,
+    val username: String?,
+    val languageCode: String?
 )
 
 /** DTO изображения в одном из размеров. */
