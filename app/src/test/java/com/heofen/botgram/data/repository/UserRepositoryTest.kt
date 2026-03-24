@@ -12,6 +12,7 @@ class UserRepositoryTest {
         val current = baseUser(
             username = "old_name",
             languageCode = "ru",
+            bio = "Stored bio",
             avatarFileId = "old-file",
             avatarFileUniqueId = "old-unique",
             avatarLocalPath = "/tmp/old.jpg"
@@ -28,14 +29,37 @@ class UserRepositoryTest {
 
         assertNull(merged.username)
         assertEquals("ru", merged.languageCode)
+        assertEquals("Stored bio", merged.bio)
         assertEquals("old-file", merged.avatarFileId)
         assertEquals("old-unique", merged.avatarFileUniqueId)
         assertEquals("/tmp/old.jpg", merged.avatarLocalPath)
     }
 
+    @Test
+    fun mergeIncomingUserWithStoredState_usesNewBioWhenPresent() {
+        val current = baseUser(
+            username = "tester",
+            languageCode = "ru",
+            bio = "Old bio"
+        )
+        val incoming = baseUser(
+            username = "tester",
+            languageCode = null,
+            bio = "New bio"
+        )
+
+        val merged = mergeIncomingUserWithStoredState(
+            incoming = incoming,
+            current = current
+        )
+
+        assertEquals("New bio", merged.bio)
+    }
+
     private fun baseUser(
         username: String?,
         languageCode: String?,
+        bio: String? = null,
         avatarFileId: String? = null,
         avatarFileUniqueId: String? = null,
         avatarLocalPath: String? = null
@@ -46,7 +70,7 @@ class UserRepositoryTest {
             lastName = "User",
             username = username,
             languageCode = languageCode,
-            bio = null,
+            bio = bio,
             avatarFileId = avatarFileId,
             avatarFileUniqueId = avatarFileUniqueId,
             avatarLocalPath = avatarLocalPath,

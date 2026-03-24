@@ -6,6 +6,7 @@ import com.heofen.botgram.ChatType
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.remote.AvatarFetchResult
 import com.heofen.botgram.data.remote.OutgoingVisualMedia
+import com.heofen.botgram.data.remote.PublicProfileBioResult
 import com.heofen.botgram.data.remote.TelegramChat
 import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
@@ -236,10 +237,28 @@ class HttpTelegramGateway(
         }
     }
 
+    override suspend fun fetchUserBio(username: String): PublicProfileBioResult {
+        val normalizedUsername = username.removePrefix("@").trim()
+            .takeIf { telegramUsernameRegex.matches(it) }
+            ?: return PublicProfileBioResult.Failure
+
+        return try {
+            val html = apiClient.getText("https://t.me/$normalizedUsername")
+            PublicProfileBioResult.Success(extractTelegramProfileBioFromHtml(html))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("TelegramGateway", "Public profile fetch error for @$normalizedUsername", e)
+            PublicProfileBioResult.Failure
+        }
+    }
+
     override fun close() {
         apiClient.close()
     }
 }
+
+private val telegramUsernameRegex = Regex("^[A-Za-z0-9_]{5,32}$")
 
 /** Преобразует сырое сообщение Telegram Bot API в внутреннюю модель приложения. */
 private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {

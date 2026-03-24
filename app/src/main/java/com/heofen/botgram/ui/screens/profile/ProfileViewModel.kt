@@ -39,6 +39,7 @@ class ProfileViewModel(
 ) : ViewModel() {
     private var chatAvatarLoadRequested = false
     private var userAvatarLoadRequested = false
+    private var userBioLoadRequested = false
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -103,6 +104,14 @@ class ProfileViewModel(
             userAvatarLoadRequested = true
             viewModelScope.launch(Dispatchers.IO) {
                 userRepository.refreshAvatar(userId)
+            }
+        }
+
+        val username = user?.username ?: chat?.takeIf { it.type == ChatType.PRIVATE }?.username
+        if (userId != null && username != null && !userBioLoadRequested) {
+            userBioLoadRequested = true
+            viewModelScope.launch(Dispatchers.IO) {
+                userRepository.refreshBio(userId = userId, username = username)
             }
         }
     }

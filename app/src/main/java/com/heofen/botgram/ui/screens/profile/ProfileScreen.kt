@@ -1,6 +1,10 @@
 package com.heofen.botgram.ui.screens.profile
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +51,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -317,7 +322,7 @@ private fun ProfileHeaderControls(
                 .padding(start = 16.dp, top = 12.dp)
                 .size(42.dp)
                 .clip(CircleShape)
-                .botgramLiquidGlass(backdrop = backdrop, shape = CircleShape, blurRadius = 16.dp)
+                .botgramLiquidGlass(backdrop = backdrop, shape = CircleShape, blurRadius = 1.dp)
                 .clickable(onClick = onBackClick),
             contentAlignment = Alignment.Center
         ) {
@@ -481,17 +486,26 @@ private fun ProfileInfoCard(
         ) {
             ProfileInfoRow(
                 value = info.id,
-                label = stringResource(R.string.profile_id_label)
+                label = stringResource(R.string.profile_id_label),
+                copyValue = info.id.takeUnless { it == "--" }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             ProfileInfoRow(
                 value = info.username,
-                label = stringResource(R.string.profile_username_label)
+                label = stringResource(R.string.profile_username_label),
+                copyValue = info.username.takeUnless { it == "--" }
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            ProfileInfoRow(
+                value = info.bio,
+                label = stringResource(R.string.profile_description_label),
+                copyValue = info.bio.takeUnless { it == "--" }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             ProfileInfoRow(
                 value = info.languageCode,
-                label = stringResource(R.string.profile_language_label)
+                label = stringResource(R.string.profile_language_label),
+                copyValue = info.languageCode.takeUnless { it == "--" }
             )
         }
     }
@@ -500,10 +514,32 @@ private fun ProfileInfoCard(
 @Composable
 private fun ProfileInfoRow(
     value: String,
-    label: String
+    label: String,
+    copyValue: String? = null
 ) {
+    val context = LocalContext.current
+
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (copyValue != null) {
+                    Modifier.combinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            val clipboardManager = context.getSystemService(ClipboardManager::class.java)
+                            clipboardManager?.setPrimaryClip(ClipData.newPlainText(label, copyValue))
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.profile_value_copied),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                } else {
+                    Modifier
+                }
+            ),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
@@ -527,6 +563,7 @@ private data class ProfileInfo(
     val initials: String,
     val id: String,
     val username: String,
+    val bio: String,
     val languageCode: String,
     val avatarPath: String?
 ) {
@@ -551,6 +588,9 @@ private data class ProfileInfo(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { if (it.startsWith("@")) it else "@$it" }
                 ?: "--"
+            val bio = user?.bio
+                ?.takeIf { it.isNotBlank() }
+                ?: "--"
             val languageCode = user?.languageCode
                 ?.takeIf { it.isNotBlank() }
                 ?.uppercase(Locale.getDefault())
@@ -564,6 +604,7 @@ private data class ProfileInfo(
                 initials = initials,
                 id = chat?.id?.toString() ?: user?.id?.toString() ?: "--",
                 username = username,
+                bio = bio,
                 languageCode = languageCode,
                 avatarPath = user?.avatarLocalPath ?: chat?.avatarLocalPath
             )

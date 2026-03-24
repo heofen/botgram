@@ -46,4 +46,12 @@ interface UserDao {
         fileUniqueId: String?,
         localPath: String?
     )
+
+    /** Обновляет сохранённое описание профиля пользователя. */
+    @Query("""
+        UPDATE users
+        SET bio = :bio
+        WHERE id = :userId
+    """)
+    suspend fun updateBio(userId: Long, bio: String?)
 }

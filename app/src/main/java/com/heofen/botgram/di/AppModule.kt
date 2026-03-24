@@ -47,8 +47,9 @@ object AppModule {
 
     fun provideUserRepository(
         database: AppDatabase,
-        mediaManager: MediaManager
-    ): UserRepository = UserRepository(database.userDao(), mediaManager)
+        mediaManager: MediaManager,
+        gateway: TelegramGateway
+    ): UserRepository = UserRepository(database.userDao(), mediaManager, gateway)
 }
 
 /** Koin-модуль, публикующий root- и session-scoped зависимости. */

@@ -2,6 +2,8 @@ package com.heofen.botgram.data.repository
 
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.data.remote.AvatarFetchResult
+import com.heofen.botgram.data.remote.PublicProfileBioResult
+import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.sync.UserSyncStore
 import com.heofen.botgram.database.dao.UserDao
 import com.heofen.botgram.database.tables.User
@@ -11,7 +13,8 @@ import kotlinx.coroutines.flow.Flow
 /** Репозиторий пользователей и их аватаров. */
 class UserRepository(
     private val userDao: UserDao,
-    private val mediaManager: MediaManager
+    private val mediaManager: MediaManager,
+    private val gateway: TelegramGateway
 ) : UserSyncStore {
     fun observeById(id: Long): Flow<User?> = userDao.observeById(id)
 
@@ -52,6 +55,23 @@ class UserRepository(
         return applyFetchedAvatar(userId = userId, current = current, avatar = avatar)
     }
 
+    /** Подтягивает публичное описание пользователя со страницы `t.me/<username>`. */
+    suspend fun refreshBio(userId: Long, username: String?) {
+        if (!userDao.userExists(userId)) return
+
+        val normalizedUsername = username
+            ?.removePrefix("@")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: userDao.getById(userId)?.username?.takeIf { it.isNotBlank() }
+            ?: return
+
+        when (val result = gateway.fetchUserBio(normalizedUsername)) {
+            is PublicProfileBioResult.Success -> userDao.updateBio(userId, result.bio)
+            PublicProfileBioResult.Failure -> Unit
+        }
+    }
+
     private suspend fun applyFetchedAvatar(
         userId: Long,
         current: User,
@@ -86,6 +106,7 @@ internal fun mergeIncomingUserWithStoredState(
 
     return incoming.copy(
         languageCode = incoming.languageCode ?: current.languageCode,
+        bio = incoming.bio ?: current.bio,
         avatarFileId = incoming.avatarFileId ?: current.avatarFileId,
         avatarFileUniqueId = incoming.avatarFileUniqueId ?: current.avatarFileUniqueId,
         avatarLocalPath = incoming.avatarLocalPath ?: current.avatarLocalPath

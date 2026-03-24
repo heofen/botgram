@@ -21,6 +21,15 @@ sealed interface AvatarFetchResult {
     object Missing : AvatarFetchResult
 }
 
+/** Результат чтения публичного описания профиля по `t.me/<username>`. */
+sealed interface PublicProfileBioResult {
+    /** Запрос выполнен успешно, `bio` может отсутствовать. */
+    data class Success(val bio: String?) : PublicProfileBioResult
+
+    /** Запрос не удалось выполнить или разобрать. */
+    object Failure : PublicProfileBioResult
+}
+
 /**
  * Абстракция над транспортом Telegram.
  *
@@ -96,6 +105,9 @@ interface TelegramGateway {
 
     /** Загружает аватар чата. */
     suspend fun downloadChatAvatar(chatId: Long): AvatarFetchResult?
+
+    /** Читает публичное описание пользователя со страницы `t.me/<username>`. */
+    suspend fun fetchUserBio(username: String): PublicProfileBioResult
 
     /** Освобождает ресурсы сетевого клиента. */
     fun close()

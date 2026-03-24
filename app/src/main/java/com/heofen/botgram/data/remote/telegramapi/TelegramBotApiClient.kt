@@ -228,6 +228,25 @@ class TelegramBotApiClient(
         return parseChat(requireResultObject(parseApiResponse(json), "getChat"))
     }
 
+    /** Выполняет обычный GET-запрос и возвращает тело ответа как строку. */
+    suspend fun getText(url: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Android) botgram")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw TelegramApiException(
+                    message = "GET $url failed with HTTP ${response.code}",
+                    statusCode = response.code
+                )
+            }
+
+            response.body?.string().orEmpty()
+        }
+    }
+
     /** Скачивает файл Telegram по `file_path` в локальный файл. */
     suspend fun downloadFile(filePath: String, destination: File): Boolean = withContext(Dispatchers.IO) {
         val request = Request.Builder()

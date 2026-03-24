@@ -82,7 +82,7 @@ class SessionContainer internal constructor(
 
     val chatRepository: ChatRepository = AppModule.provideChatRepository(database, mediaManager)
     val messageRepository: MessageRepository = AppModule.provideMessageRepository(database, gateway, mediaManager)
-    val userRepository: UserRepository = AppModule.provideUserRepository(database, mediaManager)
+    val userRepository: UserRepository = AppModule.provideUserRepository(database, mediaManager, gateway)
 
     /** Закрывает сетевой транспорт, связанный с текущей сессией. */
     fun close() {
