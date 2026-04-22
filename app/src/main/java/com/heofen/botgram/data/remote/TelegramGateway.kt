@@ -112,6 +112,19 @@ interface TelegramGateway {
     /** Получает полную информацию о чате. */
     suspend fun getChat(chatId: Long): TelegramChat?
 
+    /** Получает количество участников чата. */
+    suspend fun getChatMemberCount(chatId: Long): Int?
+
+    /** Получает список администраторов чата. */
+    suspend fun getChatAdministrators(chatId: Long): List<TelegramChatMember>?
+
     /** Освобождает ресурсы сетевого клиента. */
     fun close()
 }
+
+/** Модель участника чата. */
+data class TelegramChatMember(
+    val user: TelegramUser,
+    val status: String,
+    val customTitle: String?
+)

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +21,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +60,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
@@ -68,6 +72,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import coil.compose.AsyncImage
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.R
+import com.heofen.botgram.data.remote.TelegramChatMember
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.User
 import com.heofen.botgram.ui.theme.botgramBackdropSource
@@ -166,8 +171,8 @@ fun ProfileScreen(
             metrics.collapsedHeaderHeight,
             collapseProgress
         )
-        val profileInfo = remember(uiState.chat, uiState.user) {
-            ProfileInfo.from(uiState.chat, uiState.user)
+        val profileInfo = remember(uiState.chat, uiState.user, uiState.membersCount) {
+            ProfileInfo.from(uiState.chat, uiState.user, uiState.membersCount)
         }
 
         Box(
@@ -194,6 +199,31 @@ fun ProfileScreen(
                             info = profileInfo,
                             metrics = metrics
                         )
+                    }
+
+                    if (!uiState.admins.isNullOrEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Text(
+                                text = stringResource(R.string.profile_administrators_title),
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                            )
+                        }
+                        item {
+                            ProfileAdminsCard(
+                                admins = uiState.admins!!,
+                                metrics = metrics,
+                                viewModel = viewModel
+                            )
+                        }
+                    }
+
+                    item {
                         Spacer(modifier = Modifier.height(24.dp))
                     }
                 }
@@ -514,12 +544,128 @@ private fun ProfileInfoCard(
                 copyValue = info.bio.takeUnless { it == "--" }
             )
 
+            if (info.membersCount != null) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                ProfileInfoRow(
+                    value = info.membersCount,
+                    label = stringResource(R.string.profile_members_count_label),
+                    copyValue = null
+                )
+            }
+
             if (info.languageCode != null) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 ProfileInfoRow(
                     value = info.languageCode,
                     label = stringResource(R.string.profile_language_label),
                     copyValue = info.languageCode.takeUnless { it == "--" }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileAdminsCard(
+    admins: List<TelegramChatMember>,
+    metrics: ProfileLayoutMetrics,
+    viewModel: ProfileViewModel
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = metrics.cardHorizontalPadding),
+        shape = RoundedCornerShape(metrics.cardCornerRadius),
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            admins.forEachIndexed { index, admin ->
+                val avatarPath by viewModel.getAdminAvatar(admin.user.id).collectAsState(initial = null)
+                ProfileAdminRow(admin, avatarPath)
+                if (index < admins.size - 1) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileAdminRow(admin: TelegramChatMember, avatarPath: String?) {
+    val displayName = listOfNotNull(admin.user.firstName, admin.user.lastName).joinToString(" ")
+    val username = admin.user.username?.let { "@$it" } ?: ""
+    val initials = admin.user.firstName.firstOrNull()?.toString()?.uppercase() ?: "?"
+    val imageFile = remember(avatarPath) {
+        avatarPath?.let(::File)?.takeIf(File::exists)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (imageFile != null) {
+                AsyncImage(
+                    model = imageFile,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = initials,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.width(16.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (username.isNotEmpty()) {
+                Text(
+                    text = username,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        
+        if (!admin.customTitle.isNullOrBlank() || admin.status == "creator") {
+            val role = admin.customTitle ?: if (admin.status == "creator") "Owner" else "Admin"
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Text(
+                    text = role,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -581,10 +727,11 @@ private data class ProfileInfo(
     val username: String,
     val bio: String,
     val languageCode: String?,
-    val avatarPath: String?
+    val avatarPath: String?,
+    val membersCount: String?
 ) {
     companion object {
-        fun from(chat: Chat?, user: User?): ProfileInfo {
+        fun from(chat: Chat?, user: User?, membersCount: Int? = null): ProfileInfo {
             val displayName = listOfNotNull(
                 user?.firstName ?: chat?.firstName,
                 user?.lastName ?: chat?.lastName
@@ -639,7 +786,8 @@ private data class ProfileInfo(
                 username = username,
                 bio = bio,
                 languageCode = languageCode,
-                avatarPath = user?.avatarLocalPath ?: chat?.avatarLocalPath
+                avatarPath = user?.avatarLocalPath ?: chat?.avatarLocalPath,
+                membersCount = membersCount?.toString()
             )
         }
     }

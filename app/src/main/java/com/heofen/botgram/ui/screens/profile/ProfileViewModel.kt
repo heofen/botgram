@@ -3,12 +3,14 @@ package com.heofen.botgram.ui.screens.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heofen.botgram.ChatType
+import com.heofen.botgram.data.remote.TelegramChatMember
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +24,8 @@ import kotlinx.coroutines.launch
 data class ProfileUiState(
     val chat: Chat? = null,
     val user: User? = null,
+    val membersCount: Int? = null,
+    val admins: List<TelegramChatMember>? = null,
     val isLoading: Boolean = true
 )
 
@@ -41,6 +45,8 @@ class ProfileViewModel(
     private var userAvatarLoadRequested = false
     private var userBioLoadRequested = false
     private var chatInfoLoadRequested = false
+    private var groupDetailsLoadRequested = false
+    private val adminAvatarLoadRequested = mutableSetOf<Long>()
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -107,6 +113,20 @@ class ProfileViewModel(
             }
         }
 
+        if (chat != null && chat.type != ChatType.PRIVATE && !groupDetailsLoadRequested) {
+            groupDetailsLoadRequested = true
+            viewModelScope.launch(Dispatchers.IO) {
+                val count = chatRepository.getChatMemberCount(chat.id)
+                val admins = chatRepository.getChatAdministrators(chat.id)
+                _uiState.update {
+                    it.copy(
+                        membersCount = count,
+                        admins = admins
+                    )
+                }
+            }
+        }
+
         val userId = user?.id ?: chat?.takeIf { it.type == ChatType.PRIVATE }?.id
         if (userId != null && !userAvatarLoadRequested) {
             userAvatarLoadRequested = true
@@ -122,5 +142,15 @@ class ProfileViewModel(
                 userRepository.refreshBio(userId = userId, username = username)
             }
         }
+    }
+
+    fun getAdminAvatar(adminId: Long): Flow<String?> {
+        if (adminId !in adminAvatarLoadRequested) {
+            adminAvatarLoadRequested.add(adminId)
+            viewModelScope.launch(Dispatchers.IO) {
+                userRepository.loadAvatarIfMissing(adminId)
+            }
+        }
+        return userRepository.observeById(adminId).map { it?.avatarLocalPath }
     }
 }

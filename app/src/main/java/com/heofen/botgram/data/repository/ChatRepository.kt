@@ -3,6 +3,7 @@ package com.heofen.botgram.data.repository
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.data.remote.AvatarFetchResult
+import com.heofen.botgram.data.remote.TelegramChatMember
 import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.sync.ChatSyncStore
 import com.heofen.botgram.database.dao.ChatDao
@@ -67,6 +68,16 @@ class ChatRepository(
     suspend fun refreshChatInfo(chatId: Long) {
         val remoteChat = gateway.getChat(chatId) ?: return
         chatDao.updateDescription(chatId, remoteChat.description)
+    }
+
+    /** Получает количество участников чата. */
+    suspend fun getChatMemberCount(chatId: Long): Int? {
+        return gateway.getChatMemberCount(chatId)
+    }
+
+    /** Получает список администраторов чата. */
+    suspend fun getChatAdministrators(chatId: Long): List<TelegramChatMember>? {
+        return gateway.getChatAdministrators(chatId)
     }
 
     private suspend fun applyFetchedAvatar(

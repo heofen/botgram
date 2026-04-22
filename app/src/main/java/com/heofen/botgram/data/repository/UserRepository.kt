@@ -7,15 +7,16 @@ import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.sync.UserSyncStore
 import com.heofen.botgram.database.dao.UserDao
 import com.heofen.botgram.database.tables.User
-import java.io.File
 import kotlinx.coroutines.flow.Flow
+import java.io.File
 
-/** Репозиторий пользователей и их аватаров. */
+/** Репозиторий пользователей. */
 class UserRepository(
     private val userDao: UserDao,
     private val mediaManager: MediaManager,
     private val gateway: TelegramGateway
 ) : UserSyncStore {
+    /** Наблюдает за изменениями конкретного пользователя. */
     fun observeById(id: Long): Flow<User?> = userDao.observeById(id)
 
     suspend fun getById(id: Long): User? = userDao.getById(id)
@@ -24,25 +25,14 @@ class UserRepository(
 
     suspend fun insertUser(user: User) = userDao.insert(user)
 
-    override suspend fun upsertUser(user: User) = userDao.upsert(mergeIncomingUserWithStoredState(user, userDao.getById(user.id)))
+    override suspend fun upsertUser(user: User) = userDao.upsert(user.mergeStoredState())
 
-    suspend fun updateAvatar(
-        userId: Long,
-        fileId: String?,
-        fileUniqueId: String?,
-        localPath: String?
-    ) = userDao.updateAvatar(userId, fileId, fileUniqueId, localPath)
-
-    suspend fun findCachedAvatar(fileUniqueId: String): User? =
-        userDao.findByAvatarUniqueId(fileUniqueId)
-
-    /** Докачивает аватар пользователя, если локального файла ещё нет. */
+    /** Докачивает аватар пользователя, если он ещё не сохранён локально. */
     suspend fun loadAvatarIfMissing(userId: Long) {
         val user = userDao.getById(userId) ?: return
 
         if (user.avatarLocalPath != null) {
-            val file = File(user.avatarLocalPath)
-            if (file.exists()) return
+            if (File(user.avatarLocalPath).exists()) return
         }
 
         refreshAvatar(userId)
@@ -55,20 +45,11 @@ class UserRepository(
         return applyFetchedAvatar(userId = userId, current = current, avatar = avatar)
     }
 
-    /** Подтягивает публичное описание пользователя со страницы `t.me/<username>`. */
-    suspend fun refreshBio(userId: Long, username: String?) {
-        if (!userDao.userExists(userId)) return
-
-        val normalizedUsername = username
-            ?.removePrefix("@")
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: userDao.getById(userId)?.username?.takeIf { it.isNotBlank() }
-            ?: return
-
-        when (val result = gateway.fetchUserBio(normalizedUsername)) {
-            is PublicProfileBioResult.Success -> userDao.updateBio(userId, result.bio)
-            PublicProfileBioResult.Failure -> Unit
+    /** Синхронизирует актуальное био пользователя. */
+    suspend fun refreshBio(userId: Long, username: String) {
+        val result = gateway.fetchUserBio(username)
+        if (result is PublicProfileBioResult.Success) {
+            userDao.updateBio(userId, result.bio)
         }
     }
 
@@ -95,20 +76,15 @@ class UserRepository(
             }
         }
     }
-}
 
-/** Сливает свежий профиль пользователя с локально ценными полями. */
-internal fun mergeIncomingUserWithStoredState(
-    incoming: User,
-    current: User?
-): User {
-    if (current == null) return incoming
-
-    return incoming.copy(
-        languageCode = incoming.languageCode ?: current.languageCode,
-        bio = incoming.bio ?: current.bio,
-        avatarFileId = incoming.avatarFileId ?: current.avatarFileId,
-        avatarFileUniqueId = incoming.avatarFileUniqueId ?: current.avatarFileUniqueId,
-        avatarLocalPath = incoming.avatarLocalPath ?: current.avatarLocalPath
-    )
+    /** Сохраняет локально ценные поля, если сервер прислал неполную версию пользователя. */
+    private suspend fun User.mergeStoredState(): User {
+        val current = userDao.getById(id) ?: return this
+        return copy(
+            avatarFileId = avatarFileId ?: current.avatarFileId,
+            avatarFileUniqueId = avatarFileUniqueId ?: current.avatarFileUniqueId,
+            avatarLocalPath = avatarLocalPath ?: current.avatarLocalPath,
+            bio = bio ?: current.bio
+        )
+    }
 }

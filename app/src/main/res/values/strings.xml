@@ -42,5 +42,7 @@
     <string name="profile_username_label">Username</string>
     <string name="profile_description_label">Description</string>
     <string name="profile_language_label">Language Code</string>
+    <string name="profile_members_count_label">Members count</string>
+    <string name="profile_administrators_title">Administrators</string>
     <string name="profile_value_copied">Copied</string>
 </resources>

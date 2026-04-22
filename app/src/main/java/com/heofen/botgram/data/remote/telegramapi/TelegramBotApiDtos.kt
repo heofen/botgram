@@ -62,6 +62,14 @@ data class UserDto(
     val languageCode: String?
 )
 
+/** DTO участника чата. */
+data class ChatMemberDto(
+    val user: UserDto,
+    val status: String,
+    val customTitle: String?,
+    val isAnonymous: Boolean?
+)
+
 /** DTO изображения в одном из размеров. */
 data class PhotoSizeDto(
     val fileId: String,

@@ -228,6 +228,29 @@ class TelegramBotApiClient(
         return parseChat(requireResultObject(parseApiResponse(json), "getChat"))
     }
 
+    /** Получает количество участников чата. */
+    suspend fun getChatMemberCount(chatId: Long): Int {
+        val httpUrl = buildMethodUrl(
+            method = "getChatMemberCount",
+            queryParams = mapOf("chat_id" to chatId.toString())
+        )
+        val json = getJson(httpUrl)
+        return requireResultInt(parseApiResponse(json), "getChatMemberCount")
+    }
+
+    /** Получает список администраторов чата. */
+    suspend fun getChatAdministrators(chatId: Long): List<ChatMemberDto> {
+        val httpUrl = buildMethodUrl(
+            method = "getChatAdministrators",
+            queryParams = mapOf("chat_id" to chatId.toString())
+        )
+        val json = getJson(httpUrl)
+        val result = requireResultArray(parseApiResponse(json), "getChatAdministrators")
+        return List(result.length()) { index ->
+            parseChatMember(result.getJSONObject(index))
+        }
+    }
+
     /** Выполняет обычный GET-запрос и возвращает тело ответа как строку. */
     suspend fun getText(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder()
@@ -523,6 +546,11 @@ class TelegramBotApiClient(
             ?: throw TelegramApiException("Unexpected result type for $method")
     }
 
+    private fun requireResultInt(result: Any?, method: String): Int {
+        return result as? Int
+            ?: throw TelegramApiException("Unexpected result type for $method")
+    }
+
     private fun parseUpdates(updatesArray: JSONArray): List<UpdateDto> {
         return List(updatesArray.length()) { index ->
             parseUpdate(updatesArray.getJSONObject(index))
@@ -594,6 +622,15 @@ class TelegramBotApiClient(
             lastName = json.optString("last_name").takeIf { it.isNotBlank() },
             username = json.optString("username").takeIf { it.isNotBlank() },
             languageCode = json.optString("language_code").takeIf { it.isNotBlank() }
+        )
+    }
+
+    private fun parseChatMember(json: JSONObject): ChatMemberDto {
+        return ChatMemberDto(
+            user = parseUser(json.getJSONObject("user")),
+            status = json.getString("status"),
+            customTitle = json.optString("custom_title").takeIf { it.isNotBlank() },
+            isAnonymous = json.optBoolean("is_anonymous").takeIf { json.has("is_anonymous") }
         )
     }
 

@@ -8,6 +8,7 @@ import com.heofen.botgram.data.remote.AvatarFetchResult
 import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.remote.PublicProfileBioResult
 import com.heofen.botgram.data.remote.TelegramChat
+import com.heofen.botgram.data.remote.TelegramChatMember
 import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
 import com.heofen.botgram.data.remote.TelegramUpdate
@@ -17,7 +18,7 @@ import kotlinx.coroutines.isActive
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
-/** HTTP-реализация `TelegramGateway`, основанная на `TelegramBotApiClient`. */
+/** HTTP-реализация `TelegramGateway`, основанная on `TelegramBotApiClient`. */
 class HttpTelegramGateway(
     private val context: Context,
     token: String
@@ -262,12 +263,52 @@ class HttpTelegramGateway(
         }
     }
 
+    override suspend fun getChatMemberCount(chatId: Long): Int? {
+        return try {
+            apiClient.getChatMemberCount(chatId)
+        } catch (e: Exception) {
+            Log.e("TelegramGateway", "Error getting chat member count for $chatId", e)
+            null
+        }
+    }
+
+    override suspend fun getChatAdministrators(chatId: Long): List<TelegramChatMember>? {
+        return try {
+            apiClient.getChatAdministrators(chatId).map { it.toTelegramChatMember() }
+        } catch (e: Exception) {
+            Log.e("TelegramGateway", "Error getting chat administrators for $chatId", e)
+            null
+        }
+    }
+
     override fun close() {
         apiClient.close()
     }
 }
 
 private val telegramUsernameRegex = Regex("^[A-Za-z0-9_]{5,32}$")
+
+/** Преобразует DTO участника чата в нормализованную модель. */
+private fun ChatMemberDto.toTelegramChatMember(): TelegramChatMember {
+    return TelegramChatMember(
+        user = user.toTelegramUser(),
+        status = status,
+        customTitle = customTitle
+    )
+}
+
+/** Преобразует DTO пользователя в нормализованную модель. */
+private fun UserDto.toTelegramUser(): TelegramUser {
+    return TelegramUser(
+        id = id,
+        firstName = firstName,
+        lastName = lastName,
+        username = username,
+        languageCode = languageCode,
+        bio = null,
+        canWriteMsgToPm = false
+    )
+}
 
 /** Преобразует DTO чата в нормализованную модель. */
 private fun ChatDto.toTelegramChat(): TelegramChat {
