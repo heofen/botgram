@@ -38,8 +38,9 @@
     <string name="profile_disable_notifications">Disable notifications</string>
     <string name="profile_enable_notifications">Enable notifications</string>
     <string name="profile_id_label">ID</string>
-    <string name="profile_username_label">username</string>
-    <string name="profile_description_label">description</string>
-    <string name="profile_language_label">language_code</string>
+    <string name="profile_type_label">Type</string>
+    <string name="profile_username_label">Username</string>
+    <string name="profile_description_label">Description</string>
+    <string name="profile_language_label">Language Code</string>
     <string name="profile_value_copied">Copied</string>
 </resources>

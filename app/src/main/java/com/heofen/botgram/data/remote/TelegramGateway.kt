@@ -109,6 +109,9 @@ interface TelegramGateway {
     /** Читает публичное описание пользователя со страницы `t.me/<username>`. */
     suspend fun fetchUserBio(username: String): PublicProfileBioResult
 
+    /** Получает полную информацию о чате. */
+    suspend fun getChat(chatId: Long): TelegramChat?
+
     /** Освобождает ресурсы сетевого клиента. */
     fun close()
 }

@@ -36,8 +36,9 @@ object AppModule {
 
     fun provideChatRepository(
         database: AppDatabase,
-        mediaManager: MediaManager
-    ): ChatRepository = ChatRepository(database.chatDao(), mediaManager)
+        mediaManager: MediaManager,
+        gateway: TelegramGateway
+    ): ChatRepository = ChatRepository(database.chatDao(), mediaManager, gateway)
 
     fun provideMessageRepository(
         database: AppDatabase,

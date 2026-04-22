@@ -15,6 +15,7 @@ data class Chat(
     val firstName: String?,
     val lastName: String?,
     val username: String?,
+    val description: String? = null,
 
     val lastMessageType: MessageType?,
     val lastMessageText: String?,

@@ -444,7 +444,6 @@ fun GroupScreenBar(
 ) {
     val actionShape = CircleShape
     val titleShape = RoundedCornerShape(50.dp)
-    val avatarClickable = chat.type == ChatType.PRIVATE
 
     Box(
         modifier = Modifier
@@ -498,7 +497,7 @@ fun GroupScreenBar(
                     .size(40.dp)
                     .clip(actionShape)
                     .botgramLiquidGlass(backdrop = backdrop, shape = actionShape)
-                    .clickable(enabled = avatarClickable, onClick = onAvatarClick),
+                    .clickable(onClick = onAvatarClick),
                 contentAlignment = Alignment.Center
             ) {
                 ChatAvatar(

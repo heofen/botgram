@@ -52,6 +52,7 @@ fun TelegramChat.toDbChat(): Chat {
         firstName = firstName,
         lastName = lastName,
         username = username,
+        description = null,
         lastMessageType = lastMessageType,
         lastMessageText = lastMessageText,
         lastMessageTime = lastMessageTime,

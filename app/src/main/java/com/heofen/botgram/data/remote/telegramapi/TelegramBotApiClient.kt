@@ -582,6 +582,7 @@ class TelegramBotApiClient(
             username = json.optString("username").takeIf { it.isNotBlank() },
             firstName = json.optString("first_name").takeIf { it.isNotBlank() },
             lastName = json.optString("last_name").takeIf { it.isNotBlank() },
+            description = json.optString("description").takeIf { it.isNotBlank() },
             photo = json.optJSONObject("photo")?.let { parseChatPhoto(it) }
         )
     }

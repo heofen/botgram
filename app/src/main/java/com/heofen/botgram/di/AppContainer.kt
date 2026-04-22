@@ -80,7 +80,7 @@ class SessionContainer internal constructor(
 ) {
     private val mediaManager = mediaManagerFactory(gateway)
 
-    val chatRepository: ChatRepository = AppModule.provideChatRepository(database, mediaManager)
+    val chatRepository: ChatRepository = AppModule.provideChatRepository(database, mediaManager, gateway)
     val messageRepository: MessageRepository = AppModule.provideMessageRepository(database, gateway, mediaManager)
     val userRepository: UserRepository = AppModule.provideUserRepository(database, mediaManager, gateway)
 

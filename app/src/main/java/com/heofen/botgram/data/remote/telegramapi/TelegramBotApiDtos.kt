@@ -49,6 +49,7 @@ data class ChatDto(
     val username: String?,
     val firstName: String?,
     val lastName: String?,
+    val description: String?,
     val photo: ChatPhotoDto?
 )
 

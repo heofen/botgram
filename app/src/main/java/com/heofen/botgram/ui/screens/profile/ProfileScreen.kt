@@ -66,6 +66,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import coil.compose.AsyncImage
+import com.heofen.botgram.ChatType
 import com.heofen.botgram.R
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.User
@@ -490,23 +491,37 @@ private fun ProfileInfoCard(
                 copyValue = info.id.takeUnless { it == "--" }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            
+            if (info.type != null) {
+                ProfileInfoRow(
+                    value = info.type,
+                    label = stringResource(R.string.profile_type_label),
+                    copyValue = null
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            }
+
             ProfileInfoRow(
                 value = info.username,
                 label = stringResource(R.string.profile_username_label),
                 copyValue = info.username.takeUnless { it == "--" }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            
             ProfileInfoRow(
                 value = info.bio,
                 label = stringResource(R.string.profile_description_label),
                 copyValue = info.bio.takeUnless { it == "--" }
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            ProfileInfoRow(
-                value = info.languageCode,
-                label = stringResource(R.string.profile_language_label),
-                copyValue = info.languageCode.takeUnless { it == "--" }
-            )
+
+            if (info.languageCode != null) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                ProfileInfoRow(
+                    value = info.languageCode,
+                    label = stringResource(R.string.profile_language_label),
+                    copyValue = info.languageCode.takeUnless { it == "--" }
+                )
+            }
         }
     }
 }
@@ -562,9 +577,10 @@ private data class ProfileInfo(
     val displayName: String,
     val initials: String,
     val id: String,
+    val type: String?,
     val username: String,
     val bio: String,
-    val languageCode: String,
+    val languageCode: String?,
     val avatarPath: String?
 ) {
     companion object {
@@ -582,27 +598,44 @@ private data class ProfileInfo(
                         .joinToString("")
                         .uppercase()
                 }
+                chat?.title != null -> {
+                    chat.title.split(" ")
+                        .take(2)
+                        .mapNotNull { it.firstOrNull() }
+                        .joinToString("")
+                        .uppercase()
+                }
                 else -> "?"
+            }
+            val type = when (chat?.type) {
+                ChatType.GROUP -> "Группа"
+                ChatType.SUPERGROUP -> "Супергруппа"
+                ChatType.CHANNEL -> "Канал"
+                else -> null
             }
             val username = (user?.username ?: chat?.username)
                 ?.takeIf { it.isNotBlank() }
                 ?.let { if (it.startsWith("@")) it else "@$it" }
                 ?: "--"
-            val bio = user?.bio
+            val bio = (chat?.description ?: user?.bio)
                 ?.takeIf { it.isNotBlank() }
                 ?: "--"
-            val languageCode = user?.languageCode
-                ?.takeIf { it.isNotBlank() }
-                ?.uppercase(Locale.getDefault())
-                ?: Locale.getDefault().language
-                    .takeIf { it.isNotBlank() }
+            
+            val languageCode = if (chat?.type == ChatType.PRIVATE || user != null) {
+                user?.languageCode
+                    ?.takeIf { it.isNotBlank() }
                     ?.uppercase(Locale.getDefault())
-                    ?: "--"
+                    ?: Locale.getDefault().language
+                        .takeIf { it.isNotBlank() }
+                        ?.uppercase(Locale.getDefault())
+                        ?: "--"
+            } else null
 
             return ProfileInfo(
                 displayName = displayName,
                 initials = initials,
                 id = chat?.id?.toString() ?: user?.id?.toString() ?: "--",
+                type = type,
                 username = username,
                 bio = bio,
                 languageCode = languageCode,

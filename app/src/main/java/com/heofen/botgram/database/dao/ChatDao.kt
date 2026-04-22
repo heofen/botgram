@@ -101,6 +101,10 @@ interface ChatDao {
         localPath: String?,
     )
 
+    /** Обновляет описание (bio) чата. */
+    @Query("UPDATE chats SET description = :description WHERE id = :chatId")
+    suspend fun updateDescription(chatId: Long, description: String?)
+
     @Query(
         """
         SELECT

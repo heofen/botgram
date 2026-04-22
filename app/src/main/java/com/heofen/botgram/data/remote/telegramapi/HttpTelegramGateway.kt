@@ -253,12 +253,38 @@ class HttpTelegramGateway(
         }
     }
 
+    override suspend fun getChat(chatId: Long): TelegramChat? {
+        return try {
+            apiClient.getChat(chatId).toTelegramChat()
+        } catch (e: Exception) {
+            Log.e("TelegramGateway", "Error getting chat info for $chatId", e)
+            null
+        }
+    }
+
     override fun close() {
         apiClient.close()
     }
 }
 
 private val telegramUsernameRegex = Regex("^[A-Za-z0-9_]{5,32}$")
+
+/** Преобразует DTO чата в нормализованную модель. */
+private fun ChatDto.toTelegramChat(): TelegramChat {
+    return TelegramChat(
+        id = id,
+        type = toChatType(),
+        title = title,
+        firstName = firstName,
+        lastName = lastName,
+        username = username,
+        description = description,
+        lastMessageType = null,
+        lastMessageText = null,
+        lastMessageTime = null,
+        lastMessageSenderId = null
+    )
+}
 
 /** Преобразует сырое сообщение Telegram Bot API в внутреннюю модель приложения. */
 private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {
@@ -291,18 +317,7 @@ private fun MessageDto.toIncomingMessage(): TelegramIncomingMessage {
         mediaGroupId = mediaGroupId,
         chatAvatarChanged = newChatPhoto != null,
         chatAvatarRemoved = deleteChatPhoto,
-        chat = TelegramChat(
-            id = chat.id,
-            type = chat.toChatType(),
-            title = chat.title,
-            firstName = if (chat.type == "private") chat.firstName ?: sender?.firstName else null,
-            lastName = if (chat.type == "private") chat.lastName ?: sender?.lastName else null,
-            username = chat.username,
-            lastMessageType = determineMessageType(),
-            lastMessageText = text ?: caption,
-            lastMessageTime = date * 1000,
-            lastMessageSenderId = sender?.id
-        ),
+        chat = chat.toTelegramChat(),
         sender = sender?.let {
             TelegramUser(
                 id = it.id,

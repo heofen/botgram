@@ -3,17 +3,20 @@ package com.heofen.botgram.data.repository
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.data.remote.AvatarFetchResult
+import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.sync.ChatSyncStore
 import com.heofen.botgram.database.dao.ChatDao
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.ChatListItem
+import com.heofen.botgram.utils.toDbChat
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 
 /** Репозиторий чатов и списка диалогов. */
 class ChatRepository(
     private val chatDao: ChatDao,
-    private val mediaManager: MediaManager
+    private val mediaManager: MediaManager,
+    private val gateway: TelegramGateway
 ) : ChatSyncStore {
     /** Возвращает поток списка чатов для главного экрана. */
     fun getAllChats(): Flow<List<ChatListItem>> = chatDao.getAllChatListItems()
@@ -60,6 +63,12 @@ class ChatRepository(
         return applyFetchedAvatar(chatId = chatId, current = current, avatar = avatar)
     }
 
+    /** Синхронизирует полную информацию о чате (включая описание). */
+    suspend fun refreshChatInfo(chatId: Long) {
+        val remoteChat = gateway.getChat(chatId) ?: return
+        chatDao.updateDescription(chatId, remoteChat.description)
+    }
+
     private suspend fun applyFetchedAvatar(
         chatId: Long,
         current: Chat,
@@ -94,7 +103,8 @@ class ChatRepository(
             lastMessageSenderId = current.lastMessageSenderId,
             avatarFileId = avatarFileId ?: current.avatarFileId,
             avatarFileUniqueId = avatarFileUniqueId ?: current.avatarFileUniqueId,
-            avatarLocalPath = avatarLocalPath ?: current.avatarLocalPath
+            avatarLocalPath = avatarLocalPath ?: current.avatarLocalPath,
+            description = description ?: current.description
         )
     }
 }
