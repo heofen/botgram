@@ -41,9 +41,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -56,7 +54,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -92,19 +89,12 @@ private data class ProfileLayoutMetrics(
     val collapsedAvatarTop: Dp,
     val expandedNameTop: Dp,
     val collapsedNameTop: Dp,
-    val buttonTopExpanded: Dp,
-    val buttonTopCollapsed: Dp,
-    val buttonWidth: Dp,
-    val buttonHeight: Dp,
-    val buttonCornerRadius: Dp,
-    val buttonHorizontalPadding: Dp,
     val cardHeight: Dp,
     val cardCornerRadius: Dp,
     val cardHorizontalPadding: Dp,
     val cardContentHorizontalPadding: Dp,
     val cardContentTopPadding: Dp,
     val cardSectionSpacing: Dp,
-    val cardToButtonSpacing: Dp,
     val heroScrimHeight: Dp
 )
 
@@ -116,7 +106,6 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val backdrop = rememberBotgramBackdrop()
-    var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize()
@@ -239,8 +228,6 @@ fun ProfileScreen(
                 backdrop = backdrop,
                 metrics = metrics,
                 collapseProgress = collapseProgress,
-                notificationsEnabled = notificationsEnabled,
-                onNotificationsClick = { notificationsEnabled = !notificationsEnabled },
                 onBackClick = onBackClick
             )
 
@@ -265,11 +252,23 @@ private fun ProfileHeaderContent(
     val nameHorizontalBias = lerp(-0.92f, 0f, collapseProgress)
     val nameFontSize = lerp(25f, 20f, collapseProgress).sp
 
+    // Плавно проявляем фон шапки после того, как скролл прошел половину,
+    // чтобы скрыть элементы списка, проходящие под ней
+    val bgAlpha = ((collapseProgress - 0.5f) * 2f).coerceIn(0f, 1f)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(headerHeight)
     ) {
+        // Подложка, которая становится непрозрачной в свернутом состоянии
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(bgAlpha)
+                .background(MaterialTheme.colorScheme.surface)
+        )
+
         ProfileAnimatedAvatar(
             info = info,
             metrics = metrics,
@@ -317,36 +316,13 @@ private fun ProfileHeaderControls(
     backdrop: com.heofen.botgram.ui.theme.BotgramBackdrop,
     metrics: ProfileLayoutMetrics,
     collapseProgress: Float,
-    notificationsEnabled: Boolean,
-    onNotificationsClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
-    val buttonTop = lerp(metrics.buttonTopExpanded, metrics.buttonTopCollapsed, collapseProgress)
-    val buttonLabel = if (notificationsEnabled) {
-        stringResource(R.string.profile_disable_notifications)
-    } else {
-        stringResource(R.string.profile_enable_notifications)
-    }
-    val buttonIcon = if (notificationsEnabled) {
-        R.drawable.ic_profile_notifications_on
-    } else {
-        R.drawable.ic_profile_notifications_off
-    }
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight, collapseProgress))
     ) {
-        ProfileNotificationsButton(
-            backdrop = backdrop,
-            label = buttonLabel,
-            iconRes = buttonIcon,
-            top = buttonTop,
-            metrics = metrics,
-            onClick = onNotificationsClick
-        )
-
         Box(
             modifier = Modifier
                 .statusBarsPadding()
@@ -446,52 +422,6 @@ private fun ProfileAnimatedAvatar(
 }
 
 @Composable
-private fun ProfileNotificationsButton(
-    backdrop: com.heofen.botgram.ui.theme.BotgramBackdrop,
-    label: String,
-    iconRes: Int,
-    top: Dp,
-    metrics: ProfileLayoutMetrics,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .offset(y = top)
-            .padding(horizontal = metrics.buttonHorizontalPadding)
-            .height(metrics.buttonHeight)
-            .clip(RoundedCornerShape(metrics.buttonCornerRadius))
-            .botgramLiquidGlass(
-                backdrop = backdrop,
-                shape = RoundedCornerShape(metrics.buttonCornerRadius),
-                blurRadius = 25.dp
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 16.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-@Composable
 private fun ProfileInfoCard(
     info: ProfileInfo,
     metrics: ProfileLayoutMetrics
@@ -521,7 +451,7 @@ private fun ProfileInfoCard(
                 copyValue = info.id.takeUnless { it == "--" }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            
+
             if (info.type != null) {
                 ProfileInfoRow(
                     value = info.type,
@@ -537,7 +467,7 @@ private fun ProfileInfoCard(
                 copyValue = info.username.takeUnless { it == "--" }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            
+
             ProfileInfoRow(
                 value = info.bio,
                 label = stringResource(R.string.profile_description_label),
@@ -634,9 +564,9 @@ private fun ProfileAdminRow(admin: TelegramChatMember, avatarPath: String?) {
                 )
             }
         }
-        
+
         Spacer(modifier = Modifier.width(16.dp))
-        
+
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = displayName,
@@ -653,7 +583,7 @@ private fun ProfileAdminRow(admin: TelegramChatMember, avatarPath: String?) {
                 )
             }
         }
-        
+
         if (!admin.customTitle.isNullOrBlank() || admin.status == "creator") {
             val role = admin.customTitle ?: if (admin.status == "creator") "Owner" else "Admin"
             Surface(
@@ -767,7 +697,7 @@ private data class ProfileInfo(
             val bio = (chat?.description ?: user?.bio)
                 ?.takeIf { it.isNotBlank() }
                 ?: "--"
-            
+
             val languageCode = if (chat?.type == ChatType.PRIVATE || user != null) {
                 user?.languageCode
                     ?.takeIf { it.isNotBlank() }
@@ -775,7 +705,7 @@ private data class ProfileInfo(
                     ?: Locale.getDefault().language
                         .takeIf { it.isNotBlank() }
                         ?.uppercase(Locale.getDefault())
-                        ?: "--"
+                    ?: "--"
             } else null
 
             return ProfileInfo(
@@ -800,26 +730,19 @@ private fun profileLayoutMetrics(screenWidth: Dp): ProfileLayoutMetrics {
     return ProfileLayoutMetrics(
         screenWidth = screenWidth,
         scale = scale,
-        expandedHeaderHeight = scaled(1323f),
-        collapsedHeaderHeight = scaled(947f),
+        expandedHeaderHeight = scaled(1080f),
+        collapsedHeaderHeight = scaled(300f),
         expandedImageHeight = scaled(1080f),
-        collapsedAvatarSize = scaled(272f),
-        collapsedAvatarTop = scaled(212f),
-        expandedNameTop = scaled(826f),
-        collapsedNameTop = scaled(552f),
-        buttonTopExpanded = scaled(1035f),
-        buttonTopCollapsed = scaled(674f),
-        buttonWidth = scaled(877f),
-        buttonHeight = scaled(197f),
-        buttonCornerRadius = scaled(98.5f),
-        buttonHorizontalPadding = scaled(101f),
+        collapsedAvatarSize = scaled(120f),
+        collapsedAvatarTop = scaled(80f),
+        expandedNameTop = scaled(850f),
+        collapsedNameTop = scaled(215f),
         cardHeight = scaled(505f),
         cardCornerRadius = scaled(43f),
         cardHorizontalPadding = scaled(37f),
         cardContentHorizontalPadding = scaled(62f),
         cardContentTopPadding = scaled(40f),
         cardSectionSpacing = scaled(26f),
-        cardToButtonSpacing = scaled(91f),
         heroScrimHeight = scaled(307f)
     )
 }
