@@ -66,16 +66,21 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.tooling.preview.Preview
 import coil.compose.AsyncImage
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.R
 import com.heofen.botgram.data.remote.TelegramChatMember
+import com.heofen.botgram.data.remote.TelegramUser
 import com.heofen.botgram.database.tables.Chat
 import com.heofen.botgram.database.tables.User
+import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.ui.theme.botgramBackdropSource
 import com.heofen.botgram.ui.theme.botgramLiquidGlass
 import com.heofen.botgram.ui.theme.rememberBotgramBackdrop
 import com.heofen.botgram.utils.extensions.getInitials
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import java.io.File
 import java.util.Locale
 
@@ -104,6 +109,19 @@ fun ProfileScreen(
     onBackClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    ProfileContent(
+        uiState = uiState,
+        getAdminAvatar = { viewModel.getAdminAvatar(it) },
+        onBackClick = onBackClick
+    )
+}
+
+@Composable
+private fun ProfileContent(
+    uiState: ProfileUiState,
+    getAdminAvatar: (Long) -> Flow<String?>,
+    onBackClick: () -> Unit
+) {
     val listState = rememberLazyListState()
     val backdrop = rememberBotgramBackdrop()
 
@@ -207,7 +225,7 @@ fun ProfileScreen(
                             ProfileAdminsCard(
                                 admins = uiState.admins!!,
                                 metrics = metrics,
-                                viewModel = viewModel
+                                getAdminAvatar = getAdminAvatar
                             )
                         }
                     }
@@ -223,6 +241,13 @@ fun ProfileScreen(
                     collapseProgress = collapseProgress
                 )
             }
+
+            ProfileHeaderName(
+                info = profileInfo,
+                metrics = metrics,
+                collapseProgress = collapseProgress,
+                backdrop = backdrop
+            )
 
             ProfileHeaderControls(
                 backdrop = backdrop,
@@ -247,13 +272,8 @@ private fun ProfileHeaderContent(
     collapseProgress: Float
 ) {
     val headerHeight = lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight, collapseProgress)
-    val nameTop = lerp(metrics.expandedNameTop, metrics.collapsedNameTop, collapseProgress)
     val heroAlpha = 1f - collapseProgress
-    val nameHorizontalBias = lerp(-0.92f, 0f, collapseProgress)
-    val nameFontSize = lerp(25f, 20f, collapseProgress).sp
 
-    // Плавно проявляем фон шапки после того, как скролл прошел половину,
-    // чтобы скрыть элементы списка, проходящие под ней
     val bgAlpha = ((collapseProgress - 0.5f) * 2f).coerceIn(0f, 1f)
 
     Box(
@@ -261,7 +281,6 @@ private fun ProfileHeaderContent(
             .fillMaxWidth()
             .height(headerHeight)
     ) {
-        // Подложка, которая становится непрозрачной в свернутом состоянии
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -290,23 +309,50 @@ private fun ProfileHeaderContent(
                 )
                 .alpha(heroAlpha)
         )
+    }
+}
 
+@Composable
+private fun ProfileHeaderName(
+    info: ProfileInfo,
+    metrics: ProfileLayoutMetrics,
+    collapseProgress: Float,
+    backdrop: com.heofen.botgram.ui.theme.BotgramBackdrop
+) {
+    val headerHeight = lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight, collapseProgress)
+    val nameTop = lerp(metrics.expandedNameTop, metrics.collapsedNameTop, collapseProgress)
+    val nameHorizontalBias = lerp(-0.92f, 0f, collapseProgress)
+    val nameFontSize = lerp(25f, 20f, collapseProgress).sp
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(headerHeight)
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset(y = nameTop)
                 .padding(horizontal = 24.dp)
         ) {
-            Text(
-                text = info.displayName,
-                modifier = Modifier.align(BiasAlignment(nameHorizontalBias, 0f)),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontSize = nameFontSize,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = if (collapseProgress > 0.85f) TextAlign.Center else TextAlign.Start
-            )
+            val nameShape = CircleShape
+            Box(
+                modifier = Modifier
+                    .align(BiasAlignment(nameHorizontalBias, 0f))
+                    .clip(nameShape)
+                    .botgramLiquidGlass(backdrop = backdrop, shape = nameShape, blurRadius = 1.dp)
+            ) {
+                Text(
+                    text = info.displayName,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = nameFontSize,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = if (collapseProgress > 0.85f) TextAlign.Center else TextAlign.Start
+                )
+            }
         }
     }
 }
@@ -499,7 +545,7 @@ private fun ProfileInfoCard(
 private fun ProfileAdminsCard(
     admins: List<TelegramChatMember>,
     metrics: ProfileLayoutMetrics,
-    viewModel: ProfileViewModel
+    getAdminAvatar: (Long) -> Flow<String?>
 ) {
     Surface(
         modifier = Modifier
@@ -514,7 +560,7 @@ private fun ProfileAdminsCard(
                 .padding(vertical = 8.dp)
         ) {
             admins.forEachIndexed { index, admin ->
-                val avatarPath by viewModel.getAdminAvatar(admin.user.id).collectAsState(initial = null)
+                val avatarPath by getAdminAvatar(admin.user.id).collectAsState(initial = null)
                 ProfileAdminRow(admin, avatarPath)
                 if (index < admins.size - 1) {
                     HorizontalDivider(
