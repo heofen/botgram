@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,7 +80,9 @@ import com.heofen.botgram.database.tables.User
 import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.ui.theme.botgramBackdropSource
 import com.heofen.botgram.ui.theme.botgramLiquidGlass
+import com.heofen.botgram.ui.theme.botgramProgressiveBlur
 import com.heofen.botgram.ui.theme.rememberBotgramBackdrop
+import com.heofen.botgram.ui.theme.rememberBotgramMonetBlurBackdrop
 import com.heofen.botgram.utils.extensions.getInitials
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -94,6 +99,7 @@ private data class ProfileLayoutMetrics(
     val collapsedAvatarTop: Dp,
     val expandedNameTop: Dp,
     val collapsedNameTop: Dp,
+    val namePillHeight: Dp,
     val cardHeight: Dp,
     val cardCornerRadius: Dp,
     val cardHorizontalPadding: Dp,
@@ -123,15 +129,20 @@ private fun ProfileContent(
     onBackClick: () -> Unit
 ) {
     val listState = rememberLazyListState()
-    val backdrop = rememberBotgramBackdrop()
+    // Backdrop для стеклянных элементов (кнопка назад, пилюля имени)
+    val glassBackdrop = rememberBotgramBackdrop()
+    // Отдельный Monet-backdrop исключительно для прогрессивного блюра
+    val blurBackdrop = rememberBotgramMonetBlurBackdrop()
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize()
     ) {
         val metrics = remember(maxWidth) { profileLayoutMetrics(maxWidth) }
         val density = LocalDensity.current
+        val collapsedHeaderHeightWithStatus = metrics.collapsedHeaderHeight + statusBarHeight
         val collapseRangePx = with(density) {
-            (metrics.expandedHeaderHeight - metrics.collapsedHeaderHeight).toPx()
+            (metrics.expandedHeaderHeight - collapsedHeaderHeightWithStatus).toPx()
         }
         var headerOffsetPx by remember { mutableFloatStateOf(0f) }
 
@@ -175,7 +186,7 @@ private fun ProfileContent(
         }
         val headerHeight = lerp(
             metrics.expandedHeaderHeight,
-            metrics.collapsedHeaderHeight,
+            collapsedHeaderHeightWithStatus,
             collapseProgress
         )
         val profileInfo = remember(uiState.chat, uiState.user, uiState.membersCount) {
@@ -188,13 +199,18 @@ private fun ProfileContent(
                 .background(MaterialTheme.colorScheme.background)
                 .nestedScroll(nestedScrollConnection)
         ) {
+            // Этот Box является источником для glassBackdrop:
+            // он включает и контент списка, и шапку (аватар + blur),
+            // поэтому кнопка назад и пилюля имени видят их сквозь стекло.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .botgramBackdropSource(backdrop)
+                    .botgramBackdropSource(glassBackdrop)
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .botgramBackdropSource(blurBackdrop),
                     state = listState,
                     contentPadding = PaddingValues(
                         top = headerHeight,
@@ -238,19 +254,20 @@ private fun ProfileContent(
                 ProfileHeaderContent(
                     info = profileInfo,
                     metrics = metrics,
-                    collapseProgress = collapseProgress
+                    collapseProgress = collapseProgress,
+                    backdrop = blurBackdrop
                 )
-            }
+            } // конец glassBackdrop-источника
 
             ProfileHeaderName(
                 info = profileInfo,
                 metrics = metrics,
                 collapseProgress = collapseProgress,
-                backdrop = backdrop
+                backdrop = glassBackdrop
             )
 
             ProfileHeaderControls(
-                backdrop = backdrop,
+                backdrop = glassBackdrop,
                 metrics = metrics,
                 collapseProgress = collapseProgress,
                 onBackClick = onBackClick
@@ -269,9 +286,11 @@ private fun ProfileContent(
 private fun ProfileHeaderContent(
     info: ProfileInfo,
     metrics: ProfileLayoutMetrics,
-    collapseProgress: Float
+    collapseProgress: Float,
+    backdrop: com.heofen.botgram.ui.theme.BotgramBackdrop
 ) {
-    val headerHeight = lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight, collapseProgress)
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val headerHeight = lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight + statusBarHeight, collapseProgress)
     val heroAlpha = 1f - collapseProgress
 
     val bgAlpha = ((collapseProgress - 0.5f) * 2f).coerceIn(0f, 1f)
@@ -281,11 +300,23 @@ private fun ProfileHeaderContent(
             .fillMaxWidth()
             .height(headerHeight)
     ) {
+        // Отрицательный горизонтальный padding убирает белые полоски по краям,
+        // которые возникают из-за blur-выборки за пределами элемента.
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(headerHeight)
+                .graphicsLayer {
+                    // scaleX/Y симметрично расширяют все 4 края за пределы экрана,
+                    // скрывая blur-артефакты на каждой стороне элемента.
+                    val extend = 16.dp.toPx()
+                    scaleX = 1f + (extend / size.width).coerceAtLeast(0f)
+                    scaleY = 1f + (extend / size.height).coerceAtLeast(0f)
+                }
                 .alpha(bgAlpha)
-                .background(MaterialTheme.colorScheme.surface)
+                .botgramProgressiveBlur(
+                    backdrop = backdrop
+                )
         )
 
         ProfileAnimatedAvatar(
@@ -319,7 +350,9 @@ private fun ProfileHeaderName(
     collapseProgress: Float,
     backdrop: com.heofen.botgram.ui.theme.BotgramBackdrop
 ) {
-    val headerHeight = lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight, collapseProgress)
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val animatedStatusBarPadding = lerp(0.dp, statusBarHeight, collapseProgress)
+    val headerHeight = lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight + statusBarHeight, collapseProgress)
     val nameTop = lerp(metrics.expandedNameTop, metrics.collapsedNameTop, collapseProgress)
     val nameHorizontalBias = lerp(-0.92f, 0f, collapseProgress)
     val nameFontSize = lerp(25f, 20f, collapseProgress).sp
@@ -332,6 +365,7 @@ private fun ProfileHeaderName(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(top = animatedStatusBarPadding)
                 .offset(y = nameTop)
                 .padding(horizontal = 24.dp)
         ) {
@@ -339,12 +373,14 @@ private fun ProfileHeaderName(
             Box(
                 modifier = Modifier
                     .align(BiasAlignment(nameHorizontalBias, 0f))
+                    .height(metrics.namePillHeight)
                     .clip(nameShape)
-                    .botgramLiquidGlass(backdrop = backdrop, shape = nameShape, blurRadius = 1.dp)
+                    .botgramLiquidGlass(backdrop = backdrop, shape = nameShape, blurRadius = 1.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = info.displayName,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontSize = nameFontSize,
                         fontWeight = FontWeight.Bold
@@ -364,10 +400,13 @@ private fun ProfileHeaderControls(
     collapseProgress: Float,
     onBackClick: () -> Unit
 ) {
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val headerHeight = lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight + statusBarHeight, collapseProgress)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(lerp(metrics.expandedHeaderHeight, metrics.collapsedHeaderHeight, collapseProgress))
+            .height(headerHeight)
     ) {
         Box(
             modifier = Modifier
@@ -394,6 +433,8 @@ private fun ProfileAnimatedAvatar(
     metrics: ProfileLayoutMetrics,
     collapseProgress: Float
 ) {
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val animatedStatusBarPadding = lerp(0.dp, statusBarHeight, collapseProgress)
     val imageFile = remember(info.avatarPath) {
         info.avatarPath?.let(::File)?.takeIf(File::exists)
     }
@@ -406,6 +447,7 @@ private fun ProfileAnimatedAvatar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(top = animatedStatusBarPadding)
             .offset(y = animatedTop),
         contentAlignment = Alignment.TopCenter
     ) {
@@ -457,8 +499,10 @@ private fun ProfileAnimatedAvatar(
                         Brush.verticalGradient(
                             listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.16f),
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.96f * (1f - collapseProgress))
+                                Color.Black.copy(alpha = 0.12f),
+                                // Снижено с 0.96 → 0.55: аватарка остаётся видна снизу,
+                                // иначе glass-пилюля видела почти непрозрачный фон.
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.55f * (1f - collapseProgress))
                             )
                         )
                     )
@@ -776,13 +820,14 @@ private fun profileLayoutMetrics(screenWidth: Dp): ProfileLayoutMetrics {
     return ProfileLayoutMetrics(
         screenWidth = screenWidth,
         scale = scale,
-        expandedHeaderHeight = scaled(1080f),
-        collapsedHeaderHeight = scaled(300f),
+        expandedHeaderHeight = scaled(1209f),
+        collapsedHeaderHeight = scaled(323f),
         expandedImageHeight = scaled(1080f),
-        collapsedAvatarSize = scaled(120f),
-        collapsedAvatarTop = scaled(80f),
-        expandedNameTop = scaled(850f),
-        collapsedNameTop = scaled(215f),
+        collapsedAvatarSize = scaled(170f),
+        collapsedAvatarTop = scaled(36f),
+        expandedNameTop = scaled(950f),
+        collapsedNameTop = scaled(165f),
+        namePillHeight = scaled(90f),
         cardHeight = scaled(505f),
         cardCornerRadius = scaled(43f),
         cardHorizontalPadding = scaled(37f),
