@@ -24,8 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -537,7 +535,7 @@ private fun ReplyAwareBubbleLayout(
     }
 }
 
-/** Выбирает визуальное представление сообщения по его типу. */
+/** Вычисляет визуальное представление сообщения по его типу. */
 @Composable
 private fun BubbleBodyContent(
     msg: Message,
@@ -880,7 +878,6 @@ private fun MessageTextWithPinnedMeta(
         val inlineMetaContentWidthPx = remember(msg.isOutgoing, sendStatus, metaTextLayout.size.width, density) {
             metaTextLayout.size.width + when {
                 sendStatus != null -> with(density) { 4.dp.roundToPx() + 8.dp.roundToPx() }
-                msg.isOutgoing -> with(density) { 4.dp.roundToPx() + 14.dp.roundToPx() }
                 else -> 0
             }
         }
@@ -1063,16 +1060,6 @@ internal fun MessageMetaContent(
             textAlign = TextAlign.End,
             color = color
         )
-
-        if (msg.isOutgoing && sendStatus == null) {
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = if (msg.readStatus) Icons.Default.DoneAll else Icons.Default.Done,
-                contentDescription = if (msg.readStatus) "Read" else "Sent",
-                tint = color,
-                modifier = Modifier.size(14.dp)
-            )
-        }
     }
 }
 
@@ -1096,16 +1083,6 @@ internal fun MediaMetaBadge(
             fontWeight = FontWeight.Medium,
             color = Color.White
         )
-
-        if (msg.isOutgoing) {
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = if (msg.readStatus) Icons.Default.DoneAll else Icons.Default.Done,
-                contentDescription = if (msg.readStatus) "Read" else "Sent",
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-            )
-        }
     }
 }
 
