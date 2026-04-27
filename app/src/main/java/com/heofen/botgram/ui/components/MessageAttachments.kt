@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,6 +65,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -878,7 +880,7 @@ private fun mediaAspectRatio(
 }
 
 /** Открывает локальный файл сообщения через `FileProvider`. */
-private fun openMessageFile(
+internal fun openMessageFile(
     context: Context,
     file: File?,
     mimeType: String
@@ -1028,8 +1030,118 @@ private fun AttachmentInfo(
     }
 }
 
+/** Отрисовывает мозаику медиагруппы: несколько фото/видео в одном пузыре. */
+@Composable
+fun MediaGroupGrid(
+    messages: List<Message>,
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape = RoundedCornerShape(0.dp)
+) {
+    val display = messages.take(10)
+    val overflow = messages.size - display.size
+    val rowSizes = mediaGroupRows(display.size)
+    val rowAssignments = buildList {
+        var idx = 0
+        for (size in rowSizes) {
+            add(display.subList(idx, minOf(idx + size, display.size)))
+            idx += size
+        }
+    }
+    val context = LocalContext.current
+
+    Column(
+        modifier = modifier.fillMaxWidth().clip(shape),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        rowAssignments.forEachIndexed { rowIdx, rowMessages ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(mediaGroupRowHeight(rowMessages.size)),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                rowMessages.forEachIndexed { colIdx, msg ->
+                    val isLast = rowIdx == rowAssignments.size - 1 && colIdx == rowMessages.size - 1
+                    val file = msg.fileLocalPath?.let(::File)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable(enabled = file.existsOnDisk()) {
+                                val mime = when (msg.type) {
+                                    MessageType.VIDEO, MessageType.ANIMATION -> "video/*"
+                                    else -> "image/*"
+                                }
+                                openMessageFile(context, file, mime)
+                            }
+                    ) {
+                        if (file.existsOnDisk()) {
+                            AsyncImage(
+                                model = file,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        if (msg.type == MessageType.VIDEO || msg.type == MessageType.ANIMATION) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.22f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                        if (isLast && overflow > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.55f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+$overflow",
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun mediaGroupRows(count: Int): List<Int> = when (count) {
+    2 -> listOf(2)
+    3 -> listOf(1, 2)
+    4 -> listOf(2, 2)
+    5 -> listOf(2, 3)
+    6 -> listOf(3, 3)
+    7 -> listOf(2, 2, 3)
+    8 -> listOf(2, 3, 3)
+    9 -> listOf(2, 2, 2, 3)
+    else -> listOf(2, 2, 3, 3)
+}
+
+private fun mediaGroupRowHeight(rowSize: Int): Dp = when (rowSize) {
+    1 -> 160.dp
+    2 -> 130.dp
+    3 -> 110.dp
+    else -> 100.dp
+}
+
 /** Безопасно проверяет наличие файла на диске. */
-private fun File?.existsOnDisk(): Boolean = this?.exists() == true
+internal fun File?.existsOnDisk(): Boolean = this?.exists() == true
 
 private fun documentExtensionLabel(msg: Message): String? {
     val rawExtension = msg.fileExtension

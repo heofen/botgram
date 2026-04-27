@@ -21,6 +21,12 @@ class UserRepository(
 
     suspend fun getById(id: Long): User? = userDao.getById(id)
 
+    /** Возвращает пользователей одной выборкой по списку идентификаторов. */
+    suspend fun getByIds(ids: List<Long>): List<User> {
+        if (ids.isEmpty()) return emptyList()
+        return userDao.getByIds(ids)
+    }
+
     suspend fun userExists(id: Long): Boolean = userDao.userExists(id)
 
     suspend fun insertUser(user: User) = userDao.insert(user)

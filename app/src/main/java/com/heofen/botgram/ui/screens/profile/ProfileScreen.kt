@@ -820,20 +820,35 @@ private fun profileLayoutMetrics(screenWidth: Dp): ProfileLayoutMetrics {
     return ProfileLayoutMetrics(
         screenWidth = screenWidth,
         scale = scale,
+        // Высота шапки в развернутом состоянии
         expandedHeaderHeight = scaled(1209f),
+        // Высота шапки в свернутом состоянии (без учета статус-бара)
         collapsedHeaderHeight = scaled(323f),
+        // Высота изображения аватара в развернутом состоянии (квадрат)
         expandedImageHeight = scaled(1080f),
+        // Размер (диаметр) аватара в свернутом состоянии
         collapsedAvatarSize = scaled(170f),
+        // Отступ аватара сверху в свернутом состоянии
         collapsedAvatarTop = scaled(36f),
+        // Отступ имени сверху в развернутом состоянии
         expandedNameTop = scaled(950f),
+        // Отступ имени сверху в свернутом состоянии
         collapsedNameTop = scaled(165f),
+        // Высота "пилюли" вокруг имени
         namePillHeight = scaled(90f),
+        // Минимальная высота карточки с информацией
         cardHeight = scaled(505f),
+        // Радиус скругления углов карточек
         cardCornerRadius = scaled(43f),
+        // Горизонтальные отступы карточек от краев экрана
         cardHorizontalPadding = scaled(37f),
+        // Внутренние горизонтальные отступы контента в карточке
         cardContentHorizontalPadding = scaled(62f),
+        // Внутренние вертикальные отступы контента в карточке
         cardContentTopPadding = scaled(40f),
+        // Расстояние между секциями внутри карточки
         cardSectionSpacing = scaled(26f),
+        // Высота градиентного затемнения снизу шапки в развернутом состоянии
         heroScrimHeight = scaled(307f)
     )
 }

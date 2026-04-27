@@ -42,9 +42,11 @@ import com.heofen.botgram.ui.components.AttachmentSheet
 import com.heofen.botgram.ui.components.GroupScreenBar
 import com.heofen.botgram.ui.components.MessageDateDivider
 import com.heofen.botgram.ui.components.MessageInput
+import com.heofen.botgram.ui.components.MediaGroupBubble
 import com.heofen.botgram.ui.components.MsgBubble
 import com.heofen.botgram.ui.components.MsgBubbleClusterPosition
 import com.heofen.botgram.ui.components.rememberVoiceMessagePlaybackState
+import androidx.compose.ui.platform.LocalConfiguration
 import com.heofen.botgram.ui.theme.BotgramTheme
 import com.heofen.botgram.ui.theme.botgramBackdropSource
 import com.heofen.botgram.ui.theme.rememberBotgramBackdrop
@@ -53,12 +55,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.os.CancellationSignal
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
 import java.io.File
 import java.io.IOException
-import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -81,14 +79,19 @@ fun GroupScreen(
     val coroutineScope = rememberCoroutineScope()
     val voicePlaybackState = rememberVoiceMessagePlaybackState()
     val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
     val horizontalContentPadding = 12.dp
+    val bubbleAvailableWidth = remember(configuration.screenWidthDp, horizontalContentPadding) {
+        (configuration.screenWidthDp.dp - horizontalContentPadding * 2).coerceAtLeast(0.dp)
+    }
     var actionMessage by remember { mutableStateOf<Message?>(null) }
     var deleteMessage by remember { mutableStateOf<Message?>(null) }
     var attachmentSheetVisible by remember { mutableStateOf(false) }
     var composerHeightPx by remember { mutableStateOf(0) }
     var hasMediaPermission by remember { mutableStateOf(context.hasMediaAccessPermission()) }
-    val messagesById = remember(uiState.messages) {
-        uiState.messages.associateBy { it.messageId }
+    val selectedReplyItem = remember(uiState.renderItems, uiState.replyToMessageId) {
+        val targetId = uiState.replyToMessageId ?: return@remember null
+        uiState.renderItems.firstOrNull { it.message.messageId == targetId }
     }
     val documentPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -139,8 +142,8 @@ fun GroupScreen(
             context.showLocationToast(R.string.location_permission_denied)
         }
     }
-    val selectedReplyMessage = uiState.replyToMessageId?.let(messagesById::get)
-    val selectedReplySender = selectedReplyMessage?.senderId?.let { uiState.users[it] }
+    val selectedReplyMessage = selectedReplyItem?.message
+    val selectedReplySender = selectedReplyItem?.sender
 
     DisposableEffect(voicePlaybackState) {
         onDispose {
@@ -183,54 +186,60 @@ fun GroupScreen(
             ) {
 
                 itemsIndexed(
-                    items = uiState.messages,
-                    key = { _, it -> it.chatId to it.messageId }
-                ) { index, message ->
-                    val olderMessage = uiState.messages.getOrNull(index + 1)
-                    val newerMessage = uiState.messages.getOrNull(index - 1)
-                    val isGroupedWithOlder = olderMessage?.let { shouldClusterMessages(message, it) } == true
-                    val isGroupedWithNewer = newerMessage?.let { shouldClusterMessages(message, it) } == true
-                    val clusterPosition = when {
-                        isGroupedWithOlder && isGroupedWithNewer -> MsgBubbleClusterPosition.Middle
-                        isGroupedWithOlder -> MsgBubbleClusterPosition.Bottom
-                        isGroupedWithNewer -> MsgBubbleClusterPosition.Top
-                        else -> MsgBubbleClusterPosition.Single
-                    }
-
-                    val senderId = message.senderId
-                    val foundSender = senderId?.let { uiState.users[it] }
-                    val replyToMessage = message.replyMsgId?.let { replyId ->
-                        messagesById[replyId]
-                    }
-                    val replyToSender = replyToMessage?.senderId?.let { uiState.users[it] }
-                    val showDateHeader = olderMessage == null || !isSameCalendarDay(message, olderMessage)
+                    items = uiState.renderItems,
+                    key = { _, item -> item.message.chatId to item.message.messageId }
+                ) { _, item ->
+                    val message = item.message
+                    val isGroupedWithOlder = item.clusterPosition == MsgBubbleClusterPosition.Bottom ||
+                        item.clusterPosition == MsgBubbleClusterPosition.Middle
+                    val isGroupedWithNewer = item.clusterPosition == MsgBubbleClusterPosition.Top ||
+                        item.clusterPosition == MsgBubbleClusterPosition.Middle
                     val showAvatar = !isPersonalChat && !message.isOutgoing && !isGroupedWithNewer
                     val showSenderName = !isPersonalChat && !message.isOutgoing && !isGroupedWithOlder
                     val itemSpacing = if (isGroupedWithOlder) 2.dp else 12.dp
 
-                    // Свайп по пузырю вправо выбирает сообщение для ответа.
-                    MsgBubble(
-                        msg = message,
-                        sender = foundSender,
-                        replyToMessage = replyToMessage,
-                        replySender = replyToSender,
-                        modifier = replySwipeModifier(
-                            onReply = { viewModel.selectReplyMessage(message) }
-                        ),
-                        isPersonalMsg = isPersonalChat,
-                        showAvatar = showAvatar,
-                        showSenderName = showSenderName,
-                        clusterPosition = clusterPosition,
-                        voicePlaybackState = voicePlaybackState,
-                        onAvatarClick = foundSender?.id?.let { userId ->
-                            { onUserProfileClick(userId) }
-                        },
-                        onClick = { actionMessage = message }
+                    val swipeModifier = replySwipeModifier(
+                        onReply = { viewModel.selectReplyMessage(message) }
                     )
+                    val avatarClick = item.sender?.id?.let { userId ->
+                        { onUserProfileClick(userId) }
+                    }
+                    // Свайп по пузырю вправо выбирает сообщение для ответа.
+                    if (item.mediaGroupMessages != null) {
+                        MediaGroupBubble(
+                            messages = item.mediaGroupMessages,
+                            sender = item.sender,
+                            availableWidth = bubbleAvailableWidth,
+                            modifier = swipeModifier,
+                            isPersonalMsg = isPersonalChat,
+                            showAvatar = showAvatar,
+                            showSenderName = showSenderName,
+                            clusterPosition = item.clusterPosition,
+                            onAvatarClick = avatarClick,
+                            onClick = { actionMessage = message }
+                        )
+                    } else {
+                        MsgBubble(
+                            msg = message,
+                            sender = item.sender,
+                            availableWidth = bubbleAvailableWidth,
+                            replyToMessage = item.replyToMessage,
+                            replySender = item.replySender,
+                            modifier = swipeModifier,
+                            isPersonalMsg = isPersonalChat,
+                            showAvatar = showAvatar,
+                            showSenderName = showSenderName,
+                            clusterPosition = item.clusterPosition,
+                            voicePlaybackState = voicePlaybackState,
+                            onAvatarClick = avatarClick,
+                            onClick = { actionMessage = message },
+                            sendStatus = item.sendStatus
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(itemSpacing))
 
-                    if (showDateHeader) {
+                    if (item.showDateHeader) {
                         MessageDateDivider(timestamp = message.timestamp)
                     }
                 }
@@ -779,25 +788,6 @@ private fun DeleteMessageDialog(
         confirmButton = {}
     )
 }
-
-private const val MESSAGE_CLUSTER_WINDOW_MS = 5 * 60 * 1000L
-
-/** Решает, нужно ли визуально склеить соседние сообщения в один кластер. */
-private fun shouldClusterMessages(current: Message, neighbour: Message): Boolean {
-    if (current.isOutgoing != neighbour.isOutgoing) return false
-    if (current.senderId != neighbour.senderId) return false
-    if (!isSameCalendarDay(current, neighbour)) return false
-
-    return abs(current.timestamp - neighbour.timestamp) <= MESSAGE_CLUSTER_WINDOW_MS
-}
-
-/** Проверяет, принадлежат ли два сообщения одному календарному дню. */
-private fun isSameCalendarDay(first: Message, second: Message): Boolean =
-    messageDay(first.timestamp) == messageDay(second.timestamp)
-
-/** Возвращает локальную дату для timestamp сообщения. */
-private fun messageDay(timestamp: Long): LocalDate =
-    Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
 
 @Preview(showBackground = true, backgroundColor = 0xFFF3F5F7)
 @Composable

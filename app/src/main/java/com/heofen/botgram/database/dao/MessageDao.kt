@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 /** DAO для истории сообщений и локально скачанных вложений. */
 @Dao
 interface MessageDao {
-    /** Возвращает поток сообщений чата в хронологическом порядке. */
-    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp ASC")
+    /** Возвращает поток сообщений чата от самых новых к старым (под reverseLayout LazyColumn). */
+    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp DESC")
     fun getChatMessages(chatId: Long): Flow<List<Message>>
 
     /** Возвращает сообщения из одного media group. */

@@ -14,6 +14,10 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id")
     suspend fun getById(id: Long): User?
 
+    /** Возвращает пользователей одной выборкой, чтобы избежать N+1 запросов. */
+    @Query("SELECT * FROM users WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<User>
+
     /** Наблюдает за изменениями конкретного пользователя. */
     @Query("SELECT * FROM users WHERE id = :id")
     fun observeById(id: Long): Flow<User?>

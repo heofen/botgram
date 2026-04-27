@@ -80,26 +80,26 @@ fun UserAvatar(
     modifier: Modifier = Modifier,
     fallbackColor: Color = Color.Gray
 ) {
-    val model = user?.avatarLocalPath?.let(::File)
+    val avatarPath = user?.avatarLocalPath
+    val avatarFile = remember(avatarPath) { avatarPath?.let(::File) }
 
-    if (model != null && model.exists()) {
-        AsyncImage(
-            model = model,
-            contentDescription = "Avatar",
-            modifier = modifier.clip(CircleShape),
-            contentScale = ContentScale.Crop
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(fallbackColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = user?.getInitials() ?: "?",
+            color = Color.White,
+            fontSize = 14.sp
         )
-    } else {
-        Box(
-            modifier = modifier
-                .clip(CircleShape)
-                .background(fallbackColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = user?.getInitials() ?: "?",
-                color = Color.White,
-                fontSize = 14.sp
+        if (avatarFile != null) {
+            AsyncImage(
+                model = avatarFile,
+                contentDescription = "Avatar",
+                modifier = Modifier.matchParentSize(),
+                contentScale = ContentScale.Crop
             )
         }
     }

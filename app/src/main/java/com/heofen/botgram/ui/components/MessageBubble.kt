@@ -52,9 +52,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.database.tables.Message
 import com.heofen.botgram.database.tables.User
+import java.io.File
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.layout.ContentScale
 import com.heofen.botgram.ui.theme.BotgramTheme
 import java.time.Instant
 import java.time.LocalDate
@@ -72,6 +76,9 @@ enum class MsgBubbleClusterPosition {
     Middle,
     Bottom
 }
+
+/** Статус отправки исходящего сообщения для optimistic UI. */
+enum class SendStatus { SENDING, FAILED }
 
 private object MsgBubbleTokens {
     val BubbleCornerRadius = 12.dp
@@ -147,6 +154,7 @@ fun MessageDateDivider(timestamp: Long) {
 fun MsgBubble(
     msg: Message,
     sender: User?,
+    availableWidth: Dp,
     replyToMessage: Message? = null,
     replySender: User? = null,
     modifier: Modifier = Modifier,
@@ -156,7 +164,8 @@ fun MsgBubble(
     clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single,
     voicePlaybackState: VoiceMessagePlaybackState? = null,
     onAvatarClick: (() -> Unit)? = null,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    sendStatus: SendStatus? = null
 ) {
     val isMediaBubble = msg.type.isRichMediaBubble()
     val isVisualMediaBubble = msg.type.isVisualMediaBubble()
@@ -203,99 +212,204 @@ fun MsgBubble(
         )
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val maxBubbleWidth = when {
-            msg.type == MessageType.VIDEO_NOTE || msg.type.isStickerType() -> 220.dp
-            isMediaBubble -> maxWidth * 0.7f
-            else -> maxWidth * 0.7f
+    val maxBubbleWidth = when {
+        msg.type == MessageType.VIDEO_NOTE || msg.type.isStickerType() -> 220.dp
+        else -> availableWidth * 0.7f
+    }
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = if (msg.isOutgoing) Arrangement.End else Arrangement.Start
+    ) {
+        if (!isPersonalMsg && !msg.isOutgoing) {
+            Box(
+                modifier = Modifier.width(40.dp),
+                contentAlignment = Alignment.BottomStart
+            ) {
+                if (showAvatar) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .then(
+                                if (onAvatarClick != null) {
+                                    Modifier.clickable(onClick = onAvatarClick)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        UserAvatar(
+                            user = sender,
+                            modifier = Modifier.fillMaxSize(),
+                            fallbackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = if (msg.isOutgoing) Arrangement.End else Arrangement.Start
+        Column(
+            modifier = Modifier.widthIn(max = maxBubbleWidth),
+            horizontalAlignment = if (msg.isOutgoing) Alignment.End else Alignment.Start
         ) {
-            if (!isPersonalMsg && !msg.isOutgoing) {
-                Box(
-                    modifier = Modifier.width(40.dp),
-                    contentAlignment = Alignment.BottomStart
-                ) {
-                    if (showAvatar) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
+            if (showSenderName) {
+                SenderNameBadge(sender = sender)
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(bubbleShape)
+                    .then(
+                        if (showChrome) {
+                            Modifier
+                                .background(containerColor)
                                 .then(
-                                    if (onAvatarClick != null) {
-                                        Modifier.clickable(onClick = onAvatarClick)
+                                    if (showBubbleBorder) {
+                                        Modifier.border(
+                                            width = 1.dp,
+                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
+                                            shape = bubbleShape
+                                        )
                                     } else {
                                         Modifier
                                     }
                                 )
-                        ) {
-                            UserAvatar(
-                                user = sender,
-                                modifier = Modifier.fillMaxSize(),
-                                fallbackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                            )
+                        } else {
+                            Modifier
                         }
+                    )
+                    .then(
+                        if (onClick != null) {
+                            Modifier.clickable(onClick = onClick)
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
+                MessageBubbleContent(
+                    msg = msg,
+                    replyToMessage = replyToMessage,
+                    replySender = replySender,
+                    showChrome = showChrome,
+                    showMediaMetaOverlay = showMediaMetaOverlay,
+                    bodyHorizontalPadding = bodyHorizontalPadding,
+                    bodyTopPadding = bodyTopPadding,
+                    containerColor = containerColor,
+                    contentColor = contentColor,
+                    metaColor = metaColor,
+                    mediaShape = mediaShape,
+                    voicePlaybackState = voicePlaybackState,
+                    sendStatus = sendStatus
+                )
+            }
+        }
+    }
+}
+/** Пузырь для медиагруппы: мозаика фото/видео, подпись и мета. */
+@Composable
+fun MediaGroupBubble(
+    messages: List<Message>,
+    sender: User?,
+    availableWidth: Dp,
+    modifier: Modifier = Modifier,
+    isPersonalMsg: Boolean = false,
+    showAvatar: Boolean = !isPersonalMsg && !messages.first().isOutgoing,
+    showSenderName: Boolean = !isPersonalMsg && !messages.first().isOutgoing,
+    clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single,
+    onAvatarClick: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
+    val lastMsg = messages.last()
+    val isOutgoing = lastMsg.isOutgoing
+    val caption = messages.firstNotNullOfOrNull { it.caption?.ifBlank { null } }
+    val hasCaption = !caption.isNullOrBlank()
+    val containerColor = if (isOutgoing) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val contentColor = if (isOutgoing) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    val metaColor = visualMediaMetaColor(containerColor, contentColor)
+    val bubbleShape = remember(isOutgoing, clusterPosition) {
+        msgBubbleShape(isOutgoing = isOutgoing, position = clusterPosition, showChrome = true)
+    }
+    val maxBubbleWidth = availableWidth * 0.75f
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start
+    ) {
+        if (!isPersonalMsg && !isOutgoing) {
+            Box(
+                modifier = Modifier.width(40.dp),
+                contentAlignment = Alignment.BottomStart
+            ) {
+                if (showAvatar) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .then(
+                                if (onAvatarClick != null) Modifier.clickable(onClick = onAvatarClick)
+                                else Modifier
+                            )
+                    ) {
+                        UserAvatar(
+                            user = sender,
+                            modifier = Modifier.fillMaxSize(),
+                            fallbackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
                     }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+
+        Column(
+            modifier = Modifier.widthIn(max = maxBubbleWidth),
+            horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start
+        ) {
+            if (showSenderName) {
+                SenderNameBadge(sender = sender)
             }
 
-            Column(
-                modifier = Modifier.widthIn(max = maxBubbleWidth),
-                horizontalAlignment = if (msg.isOutgoing) Alignment.End else Alignment.Start
-            ) {
-                if (showSenderName) {
-                    SenderNameBadge(sender = sender)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(bubbleShape)
-                        .then(
-                            if (showChrome) {
-                                Modifier
-                                    .background(containerColor)
-                                    .then(
-                                        if (showBubbleBorder) {
-                                            Modifier.border(
-                                                width = 1.dp,
-                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
-                                                shape = bubbleShape
-                                            )
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
-                            } else {
-                                Modifier
-                            }
-                        )
-                        .then(
-                            if (onClick != null) {
-                                Modifier.clickable(onClick = onClick)
-                            } else {
-                                Modifier
-                            }
-                        )
-                ) {
-                    MessageBubbleContent(
-                        msg = msg,
-                        replyToMessage = replyToMessage,
-                        replySender = replySender,
-                        showChrome = showChrome,
-                        showMediaMetaOverlay = showMediaMetaOverlay,
-                        bodyHorizontalPadding = bodyHorizontalPadding,
-                        bodyTopPadding = bodyTopPadding,
-                        containerColor = containerColor,
-                        contentColor = contentColor,
-                        metaColor = metaColor,
-                        mediaShape = mediaShape,
-                        voicePlaybackState = voicePlaybackState
+            Box(
+                modifier = Modifier
+                    .clip(bubbleShape)
+                    .background(containerColor)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
+                        shape = bubbleShape
                     )
+                    .then(
+                        if (onClick != null) Modifier.clickable(onClick = onClick)
+                        else Modifier
+                    )
+            ) {
+                Column(modifier = Modifier.wrapContentWidth()) {
+                    MediaGroupGrid(messages = messages)
+                    if (hasCaption) {
+                        MediaCaptionFooter(
+                            msg = lastMsg,
+                            text = caption.orEmpty(),
+                            textColor = contentColor,
+                            metaColor = metaColor
+                        )
+                    } else {
+                        MediaMetaFooter(
+                            msg = lastMsg,
+                            metaColor = metaColor
+                        )
+                    }
                 }
             }
         }
@@ -338,7 +452,8 @@ private fun MessageBubbleContent(
     contentColor: Color,
     metaColor: Color,
     mediaShape: RoundedCornerShape,
-    voicePlaybackState: VoiceMessagePlaybackState?
+    voicePlaybackState: VoiceMessagePlaybackState?,
+    sendStatus: SendStatus? = null
 ) {
     val replyPadding = Modifier.padding(
         start = if (showChrome) 12.dp else 4.dp,
@@ -367,7 +482,8 @@ private fun MessageBubbleContent(
                     contentColor = contentColor,
                     metaColor = metaColor,
                     mediaShape = mediaShape,
-                    voicePlaybackState = voicePlaybackState
+                    voicePlaybackState = voicePlaybackState,
+                    sendStatus = sendStatus
                 )
             }
         )
@@ -382,7 +498,8 @@ private fun MessageBubbleContent(
             contentColor = contentColor,
             metaColor = metaColor,
             mediaShape = mediaShape,
-            voicePlaybackState = voicePlaybackState
+            voicePlaybackState = voicePlaybackState,
+            sendStatus = sendStatus
         )
     }
 }
@@ -432,7 +549,8 @@ private fun BubbleBodyContent(
     contentColor: Color,
     metaColor: Color,
     mediaShape: RoundedCornerShape,
-    voicePlaybackState: VoiceMessagePlaybackState?
+    voicePlaybackState: VoiceMessagePlaybackState?,
+    sendStatus: SendStatus? = null
 ) {
     val isVisualMediaBubble = msg.type.isVisualMediaBubble()
     val hasCaption = msg.type != MessageType.TEXT && !msg.caption.isNullOrBlank()
@@ -455,6 +573,7 @@ private fun BubbleBodyContent(
                             lineHeight = 22.sp
                         ),
                         minHeight = 0.dp,
+                        sendStatus = sendStatus,
                         modifier = Modifier.padding(
                             start = bodyHorizontalPadding,
                             end = bodyHorizontalPadding,
@@ -737,6 +856,7 @@ private fun MessageTextWithPinnedMeta(
     textColor: Color,
     metaColor: Color,
     minHeight: Dp = 0.dp,
+    sendStatus: SendStatus? = null,
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -757,11 +877,11 @@ private fun MessageTextWithPinnedMeta(
                 style = metaTextStyle
             )
         }
-        val inlineMetaContentWidthPx = remember(msg.isOutgoing, metaTextLayout.size.width, density) {
-            metaTextLayout.size.width + if (msg.isOutgoing) {
-                with(density) { 4.dp.roundToPx() + 14.dp.roundToPx() }
-            } else {
-                0
+        val inlineMetaContentWidthPx = remember(msg.isOutgoing, sendStatus, metaTextLayout.size.width, density) {
+            metaTextLayout.size.width + when {
+                sendStatus != null -> with(density) { 4.dp.roundToPx() + 8.dp.roundToPx() }
+                msg.isOutgoing -> with(density) { 4.dp.roundToPx() + 14.dp.roundToPx() }
+                else -> 0
             }
         }
         val inlineMetaReserveWidthPx = inlineMetaContentWidthPx + textToMetaGapPx + timestampEndPx
@@ -835,6 +955,7 @@ private fun MessageTextWithPinnedMeta(
                 MessageMetaContent(
                     msg = msg,
                     color = metaColor,
+                    sendStatus = sendStatus,
                     modifier = Modifier.offset {
                         IntOffset(
                             x = inlineMetaXOffsetPx,
@@ -868,6 +989,7 @@ private fun MessageTextWithPinnedMeta(
                     MessageMetaContent(
                         msg = msg,
                         color = metaColor,
+                        sendStatus = sendStatus,
                         modifier = Modifier.align(Alignment.CenterEnd)
                     )
                 }
@@ -909,6 +1031,7 @@ private fun buildMessageMetaLabel(msg: Message): String {
 internal fun MessageMetaContent(
     msg: Message,
     color: Color,
+    sendStatus: SendStatus? = null,
     modifier: Modifier = Modifier
 ) {
     val metaLabel = remember(msg.isEdited, msg.timestamp) { buildMessageMetaLabel(msg) }
@@ -918,6 +1041,21 @@ internal fun MessageMetaContent(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (sendStatus != null) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when (sendStatus) {
+                            SendStatus.SENDING -> Color(0xFFFFB800)
+                            SendStatus.FAILED -> Color(0xFFE53935)
+                        }
+                    )
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+
         Text(
             text = metaLabel,
             fontSize = 11.sp,
@@ -926,7 +1064,7 @@ internal fun MessageMetaContent(
             color = color
         )
 
-        if (msg.isOutgoing) {
+        if (msg.isOutgoing && sendStatus == null) {
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
                 imageVector = if (msg.readStatus) Icons.Default.DoneAll else Icons.Default.Done,
@@ -1195,6 +1333,6 @@ fun MsgBubblePreview() {
     )
 
     BotgramTheme {
-        MsgBubble(msg = msg, sender = user)
+        MsgBubble(msg = msg, sender = user, availableWidth = 360.dp)
     }
 }
