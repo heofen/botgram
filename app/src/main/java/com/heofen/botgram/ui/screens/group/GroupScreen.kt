@@ -45,6 +45,7 @@ import com.heofen.botgram.ui.components.MessageInput
 import com.heofen.botgram.ui.components.MediaGroupBubble
 import com.heofen.botgram.ui.components.MsgBubble
 import com.heofen.botgram.ui.components.MsgBubbleClusterPosition
+import com.heofen.botgram.ui.components.rememberVideoNotePlaybackState
 import com.heofen.botgram.ui.components.rememberVoiceMessagePlaybackState
 import androidx.compose.ui.platform.LocalConfiguration
 import com.heofen.botgram.ui.theme.BotgramTheme
@@ -78,6 +79,7 @@ fun GroupScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val voicePlaybackState = rememberVoiceMessagePlaybackState()
+    val videoNotePlaybackState = rememberVideoNotePlaybackState()
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val horizontalContentPadding = 12.dp
@@ -148,6 +150,11 @@ fun GroupScreen(
     DisposableEffect(voicePlaybackState) {
         onDispose {
             voicePlaybackState.release()
+        }
+    }
+    DisposableEffect(videoNotePlaybackState) {
+        onDispose {
+            videoNotePlaybackState.release()
         }
     }
 
@@ -231,6 +238,7 @@ fun GroupScreen(
                             showSenderName = showSenderName,
                             clusterPosition = item.clusterPosition,
                             voicePlaybackState = voicePlaybackState,
+                            videoNotePlaybackState = videoNotePlaybackState,
                             onAvatarClick = avatarClick,
                             onClick = { actionMessage = message },
                             sendStatus = item.sendStatus

@@ -155,3 +155,124 @@ fun rememberVoiceMessagePlaybackState(): VoiceMessagePlaybackState {
 
     return playbackState
 }
+
+internal data class VideoNotePlaybackTarget(val chatId: Long, val messageId: Long)
+
+@Stable
+class VideoNotePlaybackState(context: Context) {
+    internal val player = ExoPlayer.Builder(context.applicationContext).build().apply {
+        volume = 1f
+        repeatMode = Player.REPEAT_MODE_OFF
+    }
+
+    private val listener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            this@VideoNotePlaybackState.isPlaying = isPlaying
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            isBuffering = playbackState == Player.STATE_BUFFERING
+            refreshPosition()
+            if (playbackState == Player.STATE_ENDED) {
+                isPlaying = false
+                currentPositionMs = resolvedDurationMs().takeIf { it > 0L } ?: currentPositionMs
+                activeTarget = null
+            }
+        }
+    }
+
+    private var activeTarget by mutableStateOf<VideoNotePlaybackTarget?>(null)
+
+    var isPlaying by mutableStateOf(false)
+        private set
+    var isBuffering by mutableStateOf(false)
+        private set
+    var currentPositionMs by mutableLongStateOf(0L)
+        private set
+    var totalDurationMs by mutableLongStateOf(0L)
+        private set
+
+    init {
+        player.addListener(listener)
+    }
+
+    fun isActive(message: Message): Boolean =
+        activeTarget?.let { t ->
+            t.chatId == message.chatId && t.messageId == message.messageId
+        } == true
+
+    fun toggle(message: Message) {
+        val file = message.fileLocalPath?.let(::File)
+        if (file?.exists() != true) return
+
+        val target = VideoNotePlaybackTarget(
+            chatId = message.chatId,
+            messageId = message.messageId
+        )
+
+        if (activeTarget != target) {
+            activeTarget = target
+            currentPositionMs = 0L
+            totalDurationMs = (message.duration ?: 0L) * 1000L
+            isBuffering = true
+            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+            player.prepare()
+            player.playWhenReady = true
+            player.play()
+            return
+        }
+
+        if (player.playbackState == Player.STATE_ENDED) {
+            activeTarget = target
+            player.seekTo(0L)
+            currentPositionMs = 0L
+            player.playWhenReady = true
+            player.play()
+            return
+        }
+
+        if (player.isPlaying) player.pause() else {
+            player.playWhenReady = true
+            player.play()
+        }
+    }
+
+    fun progressFor(message: Message): Float {
+        if (!isActive(message)) return 0f
+        val duration = resolvedDurationMs().takeIf { it > 0L } ?: return 0f
+        return (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    }
+
+    fun elapsedSecondsFor(message: Message): Long =
+        if (isActive(message)) currentPositionMs / 1000L else 0L
+
+    internal val hasActivePlayback: Boolean get() = activeTarget != null
+
+    fun release() {
+        player.removeListener(listener)
+        player.release()
+    }
+
+    internal fun refreshPosition() {
+        currentPositionMs = player.currentPosition.coerceAtLeast(0L)
+        totalDurationMs = player.duration.takeIf { it > 0L } ?: totalDurationMs
+    }
+
+    private fun resolvedDurationMs(): Long =
+        player.duration.takeIf { it > 0L } ?: totalDurationMs
+}
+
+@Composable
+fun rememberVideoNotePlaybackState(): VideoNotePlaybackState {
+    val context = LocalContext.current.applicationContext
+    val state = remember(context) { VideoNotePlaybackState(context) }
+
+    LaunchedEffect(state, state.hasActivePlayback, state.isPlaying, state.isBuffering) {
+        while (state.hasActivePlayback) {
+            state.refreshPosition()
+            delay(if (state.isPlaying || state.isBuffering) 90L else 220L)
+        }
+    }
+
+    return state
+}

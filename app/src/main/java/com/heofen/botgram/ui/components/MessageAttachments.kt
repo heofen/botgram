@@ -6,8 +6,11 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import android.graphics.Outline
 import android.view.TextureView
+import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -48,16 +51,23 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -82,6 +92,10 @@ import coil.request.ImageRequest
 import com.heofen.botgram.MessageType
 import com.heofen.botgram.database.tables.Message
 import java.io.File
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private object AttachmentTokens {
@@ -145,42 +159,182 @@ fun MediaMessage(
     )
 }
 
-/** Отображает видеосообщение-кружок. */
+/** Отображает видеосообщение-кружок с inline-воспроизведением, кольцом прогресса и анимацией масштаба. */
 @Composable
-fun VideoNoteMessage(msg: Message) {
+fun VideoNoteMessage(
+    msg: Message,
+    playbackState: VideoNotePlaybackState?,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val file = msg.fileLocalPath?.let(::File)
+    val hasFile = file.existsOnDisk()
+    val isActive = playbackState?.isActive(msg) == true
+    val isPlaying = isActive && playbackState?.isPlaying == true
+    val isBuffering = isActive && playbackState?.isBuffering == true
+    val progress = if (isActive) playbackState?.progressFor(msg) ?: 0f else 0f
+    val elapsedSeconds = if (isActive) playbackState?.elapsedSecondsFor(msg) ?: 0L else 0L
 
-    Box(
-        modifier = Modifier
-            .size(216.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(enabled = file.existsOnDisk()) {
-                openMessageFile(context, file, "video/*")
-            },
-        contentAlignment = Alignment.Center
+    val scale by animateFloatAsState(
+        targetValue = if (isPlaying) 1.08f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "videoNoteScale"
+    )
+
+    val timeLabel = remember(msg.timestamp) {
+        LocalDateTime
+            .ofInstant(Instant.ofEpochMilli(msg.timestamp), ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("HH:mm"))
+    }
+    val durationLabel = when {
+        isActive && elapsedSeconds > 0L -> formatDuration(elapsedSeconds)
+        else -> formatDuration(msg.duration).ifBlank { null }
+    }
+
+    val noteSize = 216.dp
+    val scalePadding = 14.dp  // буфер для визуального overflow при scale 1.08
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (file.existsOnDisk()) {
-            AsyncImage(
-                model = file,
-                contentDescription = "Video note",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+        // Внешний Box задаёт layout-размер с запасом, чтобы scaled-круг не обрезался родителем
+        Box(
+            modifier = Modifier.size(noteSize + scalePadding * 2),
+            contentAlignment = Alignment.Center
+        ) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.18f))
-            )
+                    .size(noteSize)
+                    .scale(scale)         // scale применяется до clip → clip остаётся внутри слоя
+                    .clip(CircleShape)
+                    .background(Color.Black)
+                    .clickable(enabled = hasFile || isActive) {
+                        if (playbackState != null) {
+                            playbackState.toggle(msg)
+                        } else {
+                            openMessageFile(context, file, "video/*")
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (isActive) {
+                    VideoNoteInlinePlayer(player = playbackState!!.player)
+                } else if (hasFile) {
+                    AsyncImage(
+                        model = file,
+                        contentDescription = "Video note",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.22f))
+                    )
+                }
+
+                when {
+                    isBuffering -> CircularProgressIndicator(
+                        modifier = Modifier.size(44.dp),
+                        color = Color.White,
+                        strokeWidth = 2.5.dp
+                    )
+                    !isPlaying -> Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play video note",
+                        tint = Color.White,
+                        modifier = Modifier.size(52.dp)
+                    )
+                }
+
+                // Кольцо прогресса внутри clip: inset=strokePx гарантирует,
+                // что внешний край дуги (center + strokePx/2) = 108dp - strokePx/2 < 108dp
+                if (isActive) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val strokePx = 5.dp.toPx()
+                        val inset = strokePx          // outer edge = 108dp - strokePx/2, строго внутри
+                        val arcTopLeft = Offset(inset, inset)
+                        val arcSize = Size(size.width - 2f * inset, size.height - 2f * inset)
+
+                        drawArc(
+                            color = Color.White.copy(alpha = 0.28f),
+                            startAngle = -90f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            topLeft = arcTopLeft,
+                            size = arcSize,
+                            style = Stroke(width = strokePx)
+                        )
+
+                        if (progress > 0.003f) {
+                            drawArc(
+                                color = Color.White,
+                                startAngle = -90f,
+                                sweepAngle = 360f * progress,
+                                useCenter = false,
+                                topLeft = arcTopLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        Icon(
-            imageVector = Icons.Default.PlayArrow,
-            contentDescription = "Play",
-            tint = Color.White,
-            modifier = Modifier.size(52.dp)
-        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (durationLabel != null) {
+                Text(
+                    text = durationLabel,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
+                )
+                Text(
+                    text = "·",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f)
+                )
+            }
+            Text(
+                text = timeLabel,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
+            )
+        }
+    }
+}
+
+/** Встраивает ExoPlayer в кружок через TextureView с круговой обрезкой. */
+@Composable
+private fun VideoNoteInlinePlayer(player: ExoPlayer) {
+    AndroidView(
+        factory = { ctx ->
+            TextureView(ctx).apply {
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setOval(0, 0, view.width, view.height)
+                    }
+                }
+                clipToOutline = true
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+        update = { textureView ->
+            player.setVideoTextureView(textureView)
+        }
+    )
+    DisposableEffect(player) {
+        onDispose { player.clearVideoSurface() }
     }
 }
 

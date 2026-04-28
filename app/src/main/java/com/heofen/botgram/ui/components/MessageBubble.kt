@@ -161,6 +161,7 @@ fun MsgBubble(
     showSenderName: Boolean = !isPersonalMsg && !msg.isOutgoing,
     clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single,
     voicePlaybackState: VoiceMessagePlaybackState? = null,
+    videoNotePlaybackState: VideoNotePlaybackState? = null,
     onAvatarClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     sendStatus: SendStatus? = null
@@ -300,6 +301,7 @@ fun MsgBubble(
                     metaColor = metaColor,
                     mediaShape = mediaShape,
                     voicePlaybackState = voicePlaybackState,
+                    videoNotePlaybackState = videoNotePlaybackState,
                     sendStatus = sendStatus
                 )
             }
@@ -451,6 +453,7 @@ private fun MessageBubbleContent(
     metaColor: Color,
     mediaShape: RoundedCornerShape,
     voicePlaybackState: VoiceMessagePlaybackState?,
+    videoNotePlaybackState: VideoNotePlaybackState?,
     sendStatus: SendStatus? = null
 ) {
     val replyPadding = Modifier.padding(
@@ -481,6 +484,7 @@ private fun MessageBubbleContent(
                     metaColor = metaColor,
                     mediaShape = mediaShape,
                     voicePlaybackState = voicePlaybackState,
+                    videoNotePlaybackState = videoNotePlaybackState,
                     sendStatus = sendStatus
                 )
             }
@@ -497,6 +501,7 @@ private fun MessageBubbleContent(
             metaColor = metaColor,
             mediaShape = mediaShape,
             voicePlaybackState = voicePlaybackState,
+            videoNotePlaybackState = videoNotePlaybackState,
             sendStatus = sendStatus
         )
     }
@@ -548,6 +553,7 @@ private fun BubbleBodyContent(
     metaColor: Color,
     mediaShape: RoundedCornerShape,
     voicePlaybackState: VoiceMessagePlaybackState?,
+    videoNotePlaybackState: VideoNotePlaybackState?,
     sendStatus: SendStatus? = null
 ) {
     val isVisualMediaBubble = msg.type.isVisualMediaBubble()
@@ -555,7 +561,8 @@ private fun BubbleBodyContent(
     val showPinnedMeta = !isVisualMediaBubble &&
         !showMediaMetaOverlay &&
         msg.type != MessageType.TEXT &&
-        msg.type != MessageType.VOICE
+        msg.type != MessageType.VOICE &&
+        msg.type != MessageType.VIDEO_NOTE
 
     val bodyContent: @Composable () -> Unit = {
         when (msg.type) {
@@ -613,7 +620,10 @@ private fun BubbleBodyContent(
                 }
             )
 
-            MessageType.VIDEO_NOTE -> VideoNoteMessage(msg)
+            MessageType.VIDEO_NOTE -> VideoNoteMessage(
+                msg = msg,
+                playbackState = videoNotePlaybackState
+            )
 
             MessageType.AUDIO -> AudioMessage(
                 msg = msg,
