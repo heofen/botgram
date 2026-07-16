@@ -3,6 +3,7 @@ package com.heofen.botgram.ui.screens.group
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.heofen.botgram.data.local.ActiveChatTracker
 import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
@@ -68,10 +69,11 @@ data class ComposerMediaItem(
 
 /** ViewModel экрана переписки: загрузка истории, отправка сообщений и удаление. */
 class GroupViewModel(
-    private val chatId: Long,
+    val chatId: Long,
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    val activeChatTracker: ActiveChatTracker
 ) : ViewModel() {
     private val mediaLoadRequested = mutableSetOf<Pair<Long, Long>>()
     private val userAvatarLoadRequested = mutableSetOf<Long>()

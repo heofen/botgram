@@ -34,6 +34,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.heofen.botgram.ChatType
 import com.heofen.botgram.R
 import com.heofen.botgram.database.tables.Message
@@ -155,6 +158,24 @@ fun GroupScreen(
     DisposableEffect(videoNotePlaybackState) {
         onDispose {
             videoNotePlaybackState.release()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val tracker = viewModel.activeChatTracker
+        val chatId = viewModel.chatId
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> tracker.setActive(chatId)
+                Lifecycle.Event.ON_PAUSE -> if (tracker.current() == chatId) tracker.setActive(null)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (tracker.current() == chatId) tracker.setActive(null)
         }
     }
 

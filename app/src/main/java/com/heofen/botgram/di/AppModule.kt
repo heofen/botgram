@@ -60,6 +60,9 @@ fun appModule(appContainer: AppContainer) = module {
     single { appContainer.database }
     single { appContainer.tokenManager }
     single { appContainer.tokenValidator }
+    single { appContainer.notificationPreferences }
+    single { appContainer.activeChatTracker }
+    single { appContainer.messageNotifier }
 
     factory<SessionContainer> {
         requireNotNull(get<SessionManager>().currentSession()) {
@@ -76,7 +79,8 @@ fun appModule(appContainer: AppContainer) = module {
             chatId = params.get(),
             chatRepository = get(),
             messageRepository = get(),
-            userRepository = get()
+            userRepository = get(),
+            activeChatTracker = get()
         )
     }
     viewModel { params ->
@@ -84,7 +88,8 @@ fun appModule(appContainer: AppContainer) = module {
             target = params.get<ProfileTarget>(),
             profileId = params.get<Long>(),
             chatRepository = get(),
-            userRepository = get()
+            userRepository = get(),
+            notificationPreferences = get()
         )
     }
 }

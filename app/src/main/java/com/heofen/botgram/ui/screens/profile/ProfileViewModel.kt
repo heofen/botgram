@@ -3,6 +3,7 @@ package com.heofen.botgram.ui.screens.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heofen.botgram.ChatType
+import com.heofen.botgram.data.local.NotificationPreferences
 import com.heofen.botgram.data.remote.TelegramChatMember
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.UserRepository
@@ -12,12 +13,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,7 +42,8 @@ class ProfileViewModel(
     private val target: ProfileTarget,
     private val profileId: Long,
     private val chatRepository: ChatRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val notificationPreferences: NotificationPreferences
 ) : ViewModel() {
     private var chatAvatarLoadRequested = false
     private var userAvatarLoadRequested = false
@@ -50,6 +54,30 @@ class ProfileViewModel(
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    /** Идентификатор чата, к которому относится переключатель уведомлений. */
+    private val notificationChatId: Long? = if (target == ProfileTarget.CHAT) profileId else null
+
+    /**
+     * Состояние переключателя уведомлений: true — уведомления включены.
+     */
+    val notificationsEnabled: StateFlow<Boolean?> = if (notificationChatId != null) {
+        notificationPreferences
+            .observeMuted(notificationChatId)
+            .map { muted -> !muted }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = !notificationPreferences.isMuted(notificationChatId)
+            )
+    } else {
+        MutableStateFlow<Boolean?>(null)
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        val chatId = notificationChatId ?: return
+        notificationPreferences.setMuted(chatId, !enabled)
+    }
 
     init {
         observeProfile()

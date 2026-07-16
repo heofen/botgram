@@ -1,11 +1,15 @@
 package com.heofen.botgram
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.heofen.botgram.data.auth.TelegramTokenValidator
 import com.heofen.botgram.data.local.TokenManager
@@ -25,6 +29,10 @@ class MainActivity : ComponentActivity() {
     private val sessionManager: SessionManager by inject()
     private val tokenManager: TokenManager by inject()
     private val tokenValidator: TelegramTokenValidator by inject()
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* решение пользователя сохраняется системой; UI не реагирует на отказ */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,11 +69,24 @@ class MainActivity : ComponentActivity() {
         }
 
         startUpdateService()
+        ensureNotificationPermission()
 
         setContent {
             BotgramTheme {
                 BotgramNavHost(onLogOut = ::logOut)
             }
+        }
+    }
+
+    /** Запрашивает разрешение на показ уведомлений начиная с Android 13. */
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

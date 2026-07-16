@@ -2,12 +2,15 @@ package com.heofen.botgram.di
 
 import android.content.Context
 import com.heofen.botgram.data.MediaManager
+import com.heofen.botgram.data.local.ActiveChatTracker
+import com.heofen.botgram.data.local.NotificationPreferences
 import com.heofen.botgram.data.local.TokenManager
 import com.heofen.botgram.data.remote.TelegramGateway
 import com.heofen.botgram.data.repository.ChatRepository
 import com.heofen.botgram.data.repository.MessageRepository
 import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.database.AppDatabase
+import com.heofen.botgram.services.MessageNotifier
 
 /**
  * Корневой контейнер зависимостей приложения.
@@ -30,6 +33,21 @@ class AppContainer(
     /** Валидатор токена для экрана логина. */
     val tokenValidator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AppModule.provideTelegramTokenValidator()
+    }
+
+    /** Per-chat настройки уведомлений. */
+    val notificationPreferences: NotificationPreferences by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        NotificationPreferences(appContext)
+    }
+
+    /** Идентификатор активного на экране чата (используется для подавления уведомлений). */
+    val activeChatTracker: ActiveChatTracker by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        ActiveChatTracker()
+    }
+
+    /** Публикатор уведомлений о новых сообщениях. */
+    val messageNotifier: MessageNotifier by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        MessageNotifier(appContext, notificationPreferences, activeChatTracker)
     }
 
     @Volatile

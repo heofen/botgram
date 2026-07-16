@@ -37,6 +37,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -115,8 +117,11 @@ fun ProfileScreen(
     onBackClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
     ProfileContent(
         uiState = uiState,
+        notificationsEnabled = notificationsEnabled,
+        onNotificationsToggle = viewModel::setNotificationsEnabled,
         getAdminAvatar = { viewModel.getAdminAvatar(it) },
         onBackClick = onBackClick
     )
@@ -125,6 +130,8 @@ fun ProfileScreen(
 @Composable
 private fun ProfileContent(
     uiState: ProfileUiState,
+    notificationsEnabled: Boolean?,
+    onNotificationsToggle: (Boolean) -> Unit,
     getAdminAvatar: (Long) -> Flow<String?>,
     onBackClick: () -> Unit
 ) {
@@ -222,6 +229,17 @@ private fun ProfileContent(
                             info = profileInfo,
                             metrics = metrics
                         )
+                    }
+
+                    if (notificationsEnabled != null) {
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            ProfileNotificationToggleCard(
+                                enabled = notificationsEnabled,
+                                metrics = metrics,
+                                onToggle = onNotificationsToggle
+                            )
+                        }
                     }
 
                     if (!uiState.admins.isNullOrEmpty()) {
@@ -581,6 +599,56 @@ private fun ProfileInfoCard(
                     copyValue = info.languageCode.takeUnless { it == "--" }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ProfileNotificationToggleCard(
+    enabled: Boolean,
+    metrics: ProfileLayoutMetrics,
+    onToggle: (Boolean) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = metrics.cardHorizontalPadding),
+        shape = RoundedCornerShape(metrics.cardCornerRadius),
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle(!enabled) }
+                .padding(
+                    horizontal = metrics.cardContentHorizontalPadding,
+                    vertical = metrics.cardContentTopPadding
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.profile_notifications_label),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 18.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(
+                        if (enabled) R.string.profile_disable_notifications
+                        else R.string.profile_enable_notifications
+                    ),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors()
+            )
         }
     }
 }

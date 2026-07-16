@@ -36,6 +36,7 @@ import org.koin.android.ext.android.inject
 class GetUpdates : Service() {
     private val tokenManager: TokenManager by inject()
     private val sessionManager: SessionManager by inject()
+    private val messageNotifier: MessageNotifier by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -109,9 +110,19 @@ class GetUpdates : Service() {
     private suspend fun handleUpdate(update: TelegramUpdate) {
         try {
             val storedMessage = updateProcessor.process(update)
+            val isNewMessage = update is TelegramUpdate.NewMessage
             if (storedMessage != null) {
                 serviceScope.launch {
                     messageRepo.ensureMediaDownloaded(storedMessage)
+                }
+                if (isNewMessage && !storedMessage.isOutgoing) {
+                    val chat = chatRepo.getById(storedMessage.chatId)
+                    val sender = storedMessage.senderId?.let { userRepo.getById(it) }
+                    messageNotifier.notify(
+                        message = storedMessage,
+                        chat = chat,
+                        sender = sender
+                    )
                 }
             }
             Log.i("GetUpdates", "Success update handle")
