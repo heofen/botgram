@@ -17,14 +17,27 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material3.*
-import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +47,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -75,9 +89,17 @@ fun GroupScreen(
     viewModel: GroupViewModel,
     onBackClick: () -> Unit,
     onChatProfileClick: (Long) -> Unit,
-    onUserProfileClick: (Long) -> Unit
+    onUserProfileClick: (Long) -> Unit,
+    onMediaClick: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val users by viewModel.users.collectAsState()
+    val sendingMessages by viewModel.sendingMessages.collectAsState()
+    val lazyPagingItems = viewModel.messagesFlow.collectAsLazyPagingItems()
+    val listState = rememberLazyListState()
+    val showScrollToBottom by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 3 }
+    }
     val backdrop = rememberBotgramBackdrop()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -94,10 +116,6 @@ fun GroupScreen(
     var attachmentSheetVisible by remember { mutableStateOf(false) }
     var composerHeightPx by remember { mutableStateOf(0) }
     var hasMediaPermission by remember { mutableStateOf(context.hasMediaAccessPermission()) }
-    val selectedReplyItem = remember(uiState.renderItems, uiState.replyToMessageId) {
-        val targetId = uiState.replyToMessageId ?: return@remember null
-        uiState.renderItems.firstOrNull { it.message.messageId == targetId }
-    }
     val documentPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -147,8 +165,8 @@ fun GroupScreen(
             context.showLocationToast(R.string.location_permission_denied)
         }
     }
-    val selectedReplyMessage = selectedReplyItem?.message
-    val selectedReplySender = selectedReplyItem?.sender
+    val selectedReplyMessage = uiState.replyMessage
+    val selectedReplySender = uiState.replySender
 
     DisposableEffect(voicePlaybackState) {
         onDispose {
@@ -162,13 +180,17 @@ fun GroupScreen(
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, viewModel) {
+    DisposableEffect(lifecycleOwner, viewModel, voicePlaybackState, videoNotePlaybackState) {
         val tracker = viewModel.activeChatTracker
         val chatId = viewModel.chatId
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> tracker.setActive(chatId)
-                Lifecycle.Event.ON_PAUSE -> if (tracker.current() == chatId) tracker.setActive(null)
+                Lifecycle.Event.ON_PAUSE -> {
+                    if (tracker.current() == chatId) tracker.setActive(null)
+                    voicePlaybackState.pause()
+                    videoNotePlaybackState.pause()
+                }
                 else -> Unit
             }
         }
@@ -176,6 +198,8 @@ fun GroupScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             if (tracker.current() == chatId) tracker.setActive(null)
+            voicePlaybackState.pause()
+            videoNotePlaybackState.pause()
         }
     }
 
@@ -184,8 +208,30 @@ fun GroupScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        if (uiState.isLoading) {
+        val isInitialLoading = (uiState.isLoading || (lazyPagingItems.loadState.refresh is LoadState.Loading && lazyPagingItems.itemCount == 0)) && sendingMessages.isEmpty()
+        val isRefreshError = lazyPagingItems.loadState.refresh is LoadState.Error && lazyPagingItems.itemCount == 0 && sendingMessages.isEmpty()
+        val composerHeight = with(density) { composerHeightPx.toDp() }
+
+        if (isInitialLoading) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        } else if (isRefreshError) {
+            val refreshError = (lazyPagingItems.loadState.refresh as LoadState.Error).error
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = refreshError.localizedMessage ?: stringResource(R.string.action_retry),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(onClick = { lazyPagingItems.retry() }) {
+                    Text(text = stringResource(R.string.action_retry))
+                }
+            }
         } else {
             val isPersonalChat = uiState.chat?.type == ChatType.PRIVATE
             val layoutDirection = LocalLayoutDirection.current
@@ -193,13 +239,28 @@ fun GroupScreen(
             val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
             val navigationBarPadding = WindowInsets.navigationBars.asPaddingValues()
             val topContentPadding = statusBarPadding.calculateTopPadding() + 64.dp
-            val composerHeight = with(density) { composerHeightPx.toDp() }
             val bottomInputPadding = maxOf(
                 70.dp,
                 composerHeight + navigationBarPadding.calculateBottomPadding() + 16.dp
             )
 
+            if (lazyPagingItems.loadState.refresh is LoadState.NotLoading && lazyPagingItems.itemCount == 0 && sendingMessages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = bottomInputPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.empty_chat_messages),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 15.sp
+                    )
+                }
+            }
+
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .botgramBackdropSource(backdrop)
                     .imePadding()
@@ -212,65 +273,179 @@ fun GroupScreen(
                     end = statusBarPadding.calculateEndPadding(layoutDirection) + horizontalContentPadding
                 )
             ) {
-
-                itemsIndexed(
-                    items = uiState.renderItems,
-                    key = { _, item -> item.message.chatId to item.message.messageId }
-                ) { _, item ->
-                    val message = item.message
-                    val isGroupedWithOlder = item.clusterPosition == MsgBubbleClusterPosition.Bottom ||
-                        item.clusterPosition == MsgBubbleClusterPosition.Middle
-                    val isGroupedWithNewer = item.clusterPosition == MsgBubbleClusterPosition.Top ||
-                        item.clusterPosition == MsgBubbleClusterPosition.Middle
-                    val showAvatar = !isPersonalChat && !message.isOutgoing && !isGroupedWithNewer
-                    val showSenderName = !isPersonalChat && !message.isOutgoing && !isGroupedWithOlder
-                    val itemSpacing = if (isGroupedWithOlder) 2.dp else 12.dp
+                items(
+                    items = sendingMessages.asReversed(),
+                    key = { "pending_${it.localId}" }
+                ) { pending ->
+                    val replyTo = pending.message.replyMsgId?.let { replyId ->
+                        if (uiState.replyMessage?.messageId == replyId) uiState.replyMessage
+                        else null
+                    }
+                    val replySender = replyTo?.senderId?.let { users[it] ?: uiState.replySender }
 
                     val swipeModifier = replySwipeModifier(
-                        onReply = { viewModel.selectReplyMessage(message) }
+                        onReply = { viewModel.selectReplyMessage(pending.message) }
                     )
-                    val avatarClick = item.sender?.id?.let { userId ->
-                        { onUserProfileClick(userId) }
-                    }
-                    // Свайп по пузырю вправо выбирает сообщение для ответа.
-                    if (item.mediaGroupMessages != null) {
-                        MediaGroupBubble(
-                            messages = item.mediaGroupMessages,
-                            sender = item.sender,
-                            availableWidth = bubbleAvailableWidth,
-                            modifier = swipeModifier,
-                            isPersonalMsg = isPersonalChat,
-                            showAvatar = showAvatar,
-                            showSenderName = showSenderName,
-                            clusterPosition = item.clusterPosition,
-                            onAvatarClick = avatarClick,
-                            onClick = { actionMessage = message }
-                        )
-                    } else {
-                        MsgBubble(
-                            msg = message,
-                            sender = item.sender,
-                            availableWidth = bubbleAvailableWidth,
-                            replyToMessage = item.replyToMessage,
-                            replySender = item.replySender,
-                            modifier = swipeModifier,
-                            isPersonalMsg = isPersonalChat,
-                            showAvatar = showAvatar,
-                            showSenderName = showSenderName,
-                            clusterPosition = item.clusterPosition,
-                            voicePlaybackState = voicePlaybackState,
-                            videoNotePlaybackState = videoNotePlaybackState,
-                            onAvatarClick = avatarClick,
-                            onClick = { actionMessage = message },
-                            sendStatus = item.sendStatus
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.height(itemSpacing))
+                    MsgBubble(
+                        msg = pending.message,
+                        sender = null,
+                        availableWidth = bubbleAvailableWidth,
+                        replyToMessage = replyTo,
+                        replySender = replySender,
+                        modifier = swipeModifier,
+                        isPersonalMsg = isPersonalChat,
+                        showAvatar = false,
+                        showSenderName = false,
+                        clusterPosition = MsgBubbleClusterPosition.Single,
+                        voicePlaybackState = voicePlaybackState,
+                        videoNotePlaybackState = videoNotePlaybackState,
+                        onAvatarClick = null,
+                        onClick = {},
+                        onMediaClick = {},
+                        sendStatus = pending.status
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
-                    if (item.showDateHeader) {
-                        MessageDateDivider(timestamp = message.timestamp)
+                items(
+                    count = lazyPagingItems.itemCount,
+                    key = lazyPagingItems.itemKey { item ->
+                        when (item) {
+                            is MessageUiModel.MessageItem -> "msg_${item.message.chatId}_${item.message.messageId}"
+                            is MessageUiModel.DateHeader -> "date_${item.epochDay}"
+                        }
+                    },
+                    contentType = lazyPagingItems.itemContentType { item ->
+                        when (item) {
+                            is MessageUiModel.MessageItem -> "message"
+                            is MessageUiModel.DateHeader -> "date"
+                        }
                     }
+                ) { index ->
+                    val item = lazyPagingItems[index] ?: return@items
+                    when (item) {
+                        is MessageUiModel.MessageItem -> {
+                            val message = item.message
+
+                            val olderItem = if (index + 1 < lazyPagingItems.itemCount) lazyPagingItems.peek(index + 1) else null
+                            val olderMessage = (olderItem as? MessageUiModel.MessageItem)?.message
+
+                            val newerItem = if (index - 1 >= 0) lazyPagingItems.peek(index - 1) else null
+                            val newerMessage = (newerItem as? MessageUiModel.MessageItem)?.message
+                                ?: if (index == 0) sendingMessages.lastOrNull()?.message else null
+
+                            val currentDay = messageDayEpochDay(message.timestamp)
+                            val olderDay = olderMessage?.let { messageDayEpochDay(it.timestamp) }
+                            val newerDay = newerMessage?.let { messageDayEpochDay(it.timestamp) }
+
+                            val isGroupedWithOlder = olderMessage?.let {
+                                shouldClusterMessages(message, it, currentDay, olderDay ?: -1)
+                            } == true
+                            val isGroupedWithNewer = newerMessage?.let {
+                                shouldClusterMessages(message, it, currentDay, newerDay ?: -1)
+                            } == true
+                            val clusterPosition = when {
+                                isGroupedWithOlder && isGroupedWithNewer -> MsgBubbleClusterPosition.Middle
+                                isGroupedWithOlder -> MsgBubbleClusterPosition.Bottom
+                                isGroupedWithNewer -> MsgBubbleClusterPosition.Top
+                                else -> MsgBubbleClusterPosition.Single
+                            }
+
+                            val showAvatar = !isPersonalChat && !message.isOutgoing && clusterPosition != MsgBubbleClusterPosition.Top && clusterPosition != MsgBubbleClusterPosition.Middle
+                            val showSenderName = !isPersonalChat && !message.isOutgoing && clusterPosition != MsgBubbleClusterPosition.Bottom && clusterPosition != MsgBubbleClusterPosition.Middle
+                            val itemSpacing = if (isGroupedWithOlder) 2.dp else 12.dp
+
+                            val swipeModifier = replySwipeModifier(
+                                onReply = { viewModel.selectReplyMessage(message) }
+                            )
+                            val sender = (item.sender?.id ?: message.senderId)?.let { users[it] } ?: item.sender
+                            val replySender = (item.replySender?.id ?: item.replyToMessage?.senderId)?.let { users[it] } ?: item.replySender
+
+                            val avatarClick = sender?.id?.let { userId ->
+                                { onUserProfileClick(userId) }
+                            }
+
+                            if (item.mediaGroupMessages != null) {
+                                MediaGroupBubble(
+                                    messages = item.mediaGroupMessages,
+                                    sender = sender,
+                                    availableWidth = bubbleAvailableWidth,
+                                    modifier = swipeModifier,
+                                    isPersonalMsg = isPersonalChat,
+                                    showAvatar = showAvatar,
+                                    showSenderName = showSenderName,
+                                    clusterPosition = clusterPosition,
+                                    onAvatarClick = avatarClick,
+                                    onClick = { actionMessage = message },
+                                    onMediaClick = onMediaClick
+                                )
+                            } else {
+                                MsgBubble(
+                                    msg = message,
+                                    sender = sender,
+                                    availableWidth = bubbleAvailableWidth,
+                                    replyToMessage = item.replyToMessage,
+                                    replySender = replySender,
+                                    modifier = swipeModifier,
+                                    isPersonalMsg = isPersonalChat,
+                                    showAvatar = showAvatar,
+                                    showSenderName = showSenderName,
+                                    clusterPosition = clusterPosition,
+                                    voicePlaybackState = voicePlaybackState,
+                                    videoNotePlaybackState = videoNotePlaybackState,
+                                    onAvatarClick = avatarClick,
+                                    onClick = { actionMessage = message },
+                                    onMediaClick = { onMediaClick(message.messageId) },
+                                    sendStatus = item.sendStatus
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(itemSpacing))
+                        }
+                        is MessageUiModel.DateHeader -> {
+                            MessageDateDivider(timestamp = item.timestamp)
+                        }
+                    }
+                }
+
+                when (lazyPagingItems.loadState.append) {
+                    is LoadState.Loading -> {
+                        item(key = "loading_indicator_append", contentType = "loading") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        }
+                    }
+                    is LoadState.Error -> {
+                        item(key = "error_indicator_append", contentType = "error") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Button(
+                                    onClick = { lazyPagingItems.retry() },
+                                    colors = ButtonDefaults.textButtonColors()
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_retry),
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    else -> Unit
                 }
             }
 
@@ -278,6 +453,37 @@ fun GroupScreen(
                 modifier = Modifier
                     .height(8.dp)
             )
+        }
+
+        AnimatedVisibility(
+            visible = showScrollToBottom,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(
+                    bottom = composerHeight + 16.dp,
+                    end = horizontalContentPadding + 4.dp
+                )
+        ) {
+            SmallFloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Scroll to bottom"
+                )
+            }
         }
 
         uiState.chat?.let { chat ->
@@ -310,7 +516,12 @@ fun GroupScreen(
                     hasMediaPermission = context.hasMediaAccessPermission()
                     attachmentSheetVisible = true
                 },
-                onSendClick = viewModel::sendMessage,
+                onSendClick = {
+                    viewModel.sendMessage()
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
                 onRemovePendingMedia = viewModel::removePendingMedia,
                 onCancelReply = viewModel::clearReplyMessage
             )

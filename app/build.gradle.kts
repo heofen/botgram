@@ -64,6 +64,9 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.androidx.room)
     ksp(libs.androidx.room.compiler)
+    implementation(libs.androidx.room.paging)
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
     implementation(libs.backdrop)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
@@ -75,6 +78,7 @@ dependencies {
     implementation("io.insert-koin:koin-androidx-compose:3.5.0")
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
+    implementation(libs.telephoto.zoomable.image.coil)
 }
 
 configurations.all {

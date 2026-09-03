@@ -42,4 +42,6 @@
     <string name="profile_description_label">описание</string>
     <string name="profile_language_label">language_code</string>
     <string name="profile_value_copied">Скопировано</string>
+    <string name="empty_chat_messages">Сообщений пока нет</string>
+    <string name="action_retry">Повторить</string>
 </resources>

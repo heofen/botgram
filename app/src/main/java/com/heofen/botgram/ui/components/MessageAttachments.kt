@@ -54,6 +54,9 @@ import androidx.compose.material3.Text
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -119,7 +122,8 @@ fun MediaMessage(
     icon: ImageVector,
     label: String,
     shape: RoundedCornerShape = RoundedCornerShape(12.dp),
-    showMetaOverlay: Boolean = false
+    showMetaOverlay: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
     val file = msg.fileLocalPath?.let(::File)
     val imageAspectRatio = remember(msg.width, msg.height) {
@@ -131,6 +135,7 @@ fun MediaMessage(
         mimeType = "image/*",
         aspectRatio = imageAspectRatio,
         shape = shape,
+        onClick = onClick,
         content = {
             if (file.existsOnDisk()) {
                 AsyncImage(
@@ -779,7 +784,8 @@ fun VideoMessage(
     msg: Message,
     label: String = "Video",
     shape: RoundedCornerShape = RoundedCornerShape(12.dp),
-    showMetaOverlay: Boolean = false
+    showMetaOverlay: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
     val file = msg.fileLocalPath?.let(::File)
     val renderMode = remember(msg.type, file?.path) {
@@ -794,6 +800,7 @@ fun VideoMessage(
         mimeType = "video/*",
         aspectRatio = videoAspectRatio,
         shape = shape,
+        onClick = onClick,
         content = {
             when {
                 file.existsOnDisk() && renderMode == InlinePreviewMode.GIF -> {
@@ -804,14 +811,8 @@ fun VideoMessage(
                     Box(modifier = Modifier.fillMaxSize()) {
                         InlineVideoContent(
                             file = file!!,
-                            autoplay = msg.type == MessageType.ANIMATION || !videoHasAudio(file)
+                            autoplay = true
                         )
-                        if (msg.type == MessageType.VIDEO) {
-                            CenteredVideoPlayButton(
-                                label = label,
-                                modifier = Modifier.align(Alignment.Center)
-                            )
-                        }
                     }
                 }
 
@@ -820,6 +821,14 @@ fun VideoMessage(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
+                        if (file.existsOnDisk()) {
+                            AsyncImage(
+                                model = file,
+                                contentDescription = label,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                         if (msg.type == MessageType.VIDEO) {
                             CenteredVideoPlayButton(label = label)
                         } else {
@@ -930,9 +939,10 @@ private fun InlineVideoContent(
     autoplay: Boolean
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val fileUri = remember(file.absolutePath) { Uri.fromFile(file) }
     val exoPlayer = remember(file.absolutePath, autoplay) {
-        ExoPlayer.Builder(context).build().apply {
+        ExoPlayer.Builder(context.applicationContext).build().apply {
             repeatMode = Player.REPEAT_MODE_ONE
             volume = 0f
             playWhenReady = autoplay
@@ -941,12 +951,21 @@ private fun InlineVideoContent(
         }
     }
 
-    LaunchedEffect(exoPlayer, fileUri, autoplay) {
-        exoPlayer.setMediaItem(MediaItem.fromUri(fileUri))
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = autoplay
-        if (autoplay) {
-            exoPlayer.play()
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    exoPlayer.pause()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    if (autoplay) exoPlayer.play()
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -962,6 +981,9 @@ private fun InlineVideoContent(
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)
+            exoPlayer.stop()
+            exoPlayer.clearVideoSurface()
+            exoPlayer.clearMediaItems()
             exoPlayer.release()
         }
     }
@@ -980,23 +1002,6 @@ private fun InlineVideoContent(
             exoPlayer.setVideoTextureView(textureView)
         }
     )
-
-    DisposableEffect(exoPlayer) {
-        onDispose {
-            exoPlayer.clearVideoSurface()
-        }
-    }
-}
-
-/** Проверяет, содержит ли видеоролик аудиодорожку. */
-private fun videoHasAudio(file: File): Boolean {
-    val retriever = MediaMetadataRetriever()
-    return runCatching {
-        retriever.setDataSource(file.absolutePath)
-        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
-    }.getOrDefault(false).also {
-        retriever.release()
-    }
 }
 
 private enum class InlinePreviewMode {
@@ -1012,7 +1017,6 @@ private fun resolveAnimatedPreviewMode(
 ): InlinePreviewMode {
     val extension = file?.extension?.lowercase()
     return when {
-        type == MessageType.VIDEO -> InlinePreviewMode.VIDEO
         type == MessageType.ANIMATION && extension in setOf("gif", "webp") -> InlinePreviewMode.GIF
         type == MessageType.ANIMATION && file != null -> InlinePreviewMode.VIDEO
         else -> InlinePreviewMode.NONE
@@ -1064,6 +1068,7 @@ private fun MediaFrame(
     mimeType: String,
     aspectRatio: Float,
     shape: RoundedCornerShape,
+    onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
     bottomStartContent: @Composable BoxScope.() -> Unit = {},
     bottomEndContent: @Composable BoxScope.() -> Unit = {}
@@ -1078,7 +1083,11 @@ private fun MediaFrame(
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = file.existsOnDisk()) {
-                openMessageFile(context, file, mimeType)
+                if (onClick != null) {
+                    onClick()
+                } else {
+                    openMessageFile(context, file, mimeType)
+                }
             }
     ) {
         content()
@@ -1189,7 +1198,8 @@ private fun AttachmentInfo(
 fun MediaGroupGrid(
     messages: List<Message>,
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(0.dp)
+    shape: RoundedCornerShape = RoundedCornerShape(0.dp),
+    onMediaClick: ((Long) -> Unit)? = null
 ) {
     val display = messages.take(10)
     val overflow = messages.size - display.size
@@ -1223,11 +1233,15 @@ fun MediaGroupGrid(
                             .fillMaxHeight()
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable(enabled = file.existsOnDisk()) {
-                                val mime = when (msg.type) {
-                                    MessageType.VIDEO, MessageType.ANIMATION -> "video/*"
-                                    else -> "image/*"
+                                if (onMediaClick != null) {
+                                    onMediaClick(msg.messageId)
+                                } else {
+                                    val mime = when (msg.type) {
+                                        MessageType.VIDEO, MessageType.ANIMATION -> "video/*"
+                                        else -> "image/*"
+                                    }
+                                    openMessageFile(context, file, mime)
                                 }
-                                openMessageFile(context, file, mime)
                             }
                     ) {
                         if (file.existsOnDisk()) {

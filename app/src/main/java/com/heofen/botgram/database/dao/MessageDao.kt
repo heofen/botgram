@@ -1,5 +1,6 @@
 package com.heofen.botgram.database.dao
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -14,9 +15,22 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp DESC")
     fun getChatMessages(chatId: Long): Flow<List<Message>>
 
+    /** Возвращает PagingSource сообщений чата от самых новых к старым. */
+    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp DESC, messageId DESC")
+    fun getChatMessagesPaging(chatId: Long): PagingSource<Int, Message>
+
+
+    /** Возвращает медиасообщения чата (фото, видео). */
+    @Query("SELECT * FROM messages WHERE chatId = :chatId AND type IN ('PHOTO', 'VIDEO', 'ANIMATION') ORDER BY timestamp ASC")
+    fun getMediaMessagesForChat(chatId: Long): Flow<List<Message>>
+
     /** Возвращает сообщения из одного media group. */
     @Query("SELECT * FROM messages WHERE mediaGroupId = :groupId ORDER BY messageId ASC")
     fun getMediaGroup(groupId: String): Flow<List<Message>>
+
+    /** Возвращает сообщения из одного media group списком (для Paging mapping). */
+    @Query("SELECT * FROM messages WHERE mediaGroupId = :groupId ORDER BY messageId ASC")
+    suspend fun getMediaGroupList(groupId: String): List<Message>
 
     /** Ищет конкретное сообщение по составному ключу. */
     @Query("SELECT * FROM messages WHERE chatId = :chatId AND messageId = :messageId")

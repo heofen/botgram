@@ -13,6 +13,8 @@ import com.heofen.botgram.ui.screens.group.GroupViewModel
 import com.heofen.botgram.ui.screens.profile.ProfileScreen
 import com.heofen.botgram.ui.screens.profile.ProfileTarget
 import com.heofen.botgram.ui.screens.profile.ProfileViewModel
+import com.heofen.botgram.ui.screens.mediaviewer.MediaViewerScreen
+import com.heofen.botgram.ui.screens.mediaviewer.MediaViewerViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -54,6 +56,9 @@ fun BotgramNavHost(onLogOut: () -> Unit) {
                 },
                 onUserProfileClick = { userId ->
                     navController.navigate("profile/user/$userId")
+                },
+                onMediaClick = { messageId ->
+                    navController.navigate("media_viewer/$chatId/$messageId")
                 }
             )
         }
@@ -83,6 +88,26 @@ fun BotgramNavHost(onLogOut: () -> Unit) {
             )
 
             ProfileScreen(
+                viewModel = viewModel,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "media_viewer/{chatId}/{messageId}",
+            arguments = listOf(
+                navArgument("chatId") { type = NavType.LongType },
+                navArgument("messageId") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getLong("chatId") ?: return@composable
+            val messageId = backStackEntry.arguments?.getLong("messageId") ?: return@composable
+            
+            val viewModel: MediaViewerViewModel = koinViewModel(
+                parameters = { parametersOf(chatId, messageId) }
+            )
+            
+            MediaViewerScreen(
                 viewModel = viewModel,
                 onBackClick = { navController.popBackStack() }
             )

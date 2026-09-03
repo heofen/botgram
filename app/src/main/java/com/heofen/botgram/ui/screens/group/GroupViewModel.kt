@@ -3,6 +3,14 @@ package com.heofen.botgram.ui.screens.group
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.filter
+import androidx.paging.insertHeaderItem
+import androidx.paging.insertSeparators
+import androidx.paging.map
 import com.heofen.botgram.data.local.ActiveChatTracker
 import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.repository.ChatRepository
@@ -15,33 +23,41 @@ import com.heofen.botgram.MessageType
 import com.heofen.botgram.ui.components.MsgBubbleClusterPosition
 import com.heofen.botgram.ui.components.SendStatus
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.abs
 
-/** Готовый к отрисовке элемент списка сообщений: все соседние решения уже посчитаны. */
-data class MessageRenderItem(
-    val message: Message,
-    val sender: User?,
-    val replyToMessage: Message?,
-    val replySender: User?,
-    val clusterPosition: MsgBubbleClusterPosition,
-    val showDateHeader: Boolean,
-    val sendStatus: SendStatus? = null,
-    /** Все сообщения медиагруппы (≥2), отсортированные от старых к новым. Null для одиночных сообщений. */
-    val mediaGroupMessages: List<Message>? = null
-)
+/** Элемент списка сообщений для UI (сообщение или заголовок с датой). */
+sealed class MessageUiModel {
+    data class MessageItem(
+        val message: Message,
+        val sender: User?,
+        val replyToMessage: Message?,
+        val replySender: User?,
+        val sendStatus: SendStatus? = null,
+        val mediaGroupMessages: List<Message>? = null
+    ) : MessageUiModel() {
+        val messageId: Long get() = message.messageId
+        val chatId: Long get() = message.chatId
+    }
+
+    data class DateHeader(
+        val date: LocalDate,
+        val timestamp: Long
+    ) : MessageUiModel() {
+        val epochDay: Long get() = date.toEpochDay()
+    }
+}
 
 /** Оптимистичное сообщение в процессе отправки или с ошибкой. */
 data class PendingMessageEntry(
@@ -53,10 +69,11 @@ data class PendingMessageEntry(
 /** Состояние экрана переписки. */
 data class GroupUiState(
     val chat: Chat? = null,
-    val renderItems: List<MessageRenderItem> = emptyList(),
     val isLoading: Boolean = true,
     val messageText: String = "",
     val replyToMessageId: Long? = null,
+    val replyMessage: Message? = null,
+    val replySender: User? = null,
     val pendingMedia: List<ComposerMediaItem> = emptyList()
 )
 
@@ -75,15 +92,116 @@ class GroupViewModel(
     private val userRepository: UserRepository,
     val activeChatTracker: ActiveChatTracker
 ) : ViewModel() {
-    private val mediaLoadRequested = mutableSetOf<Pair<Long, Long>>()
-    private val userAvatarLoadRequested = mutableSetOf<Long>()
+    private val mediaLoadRequested = java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<Long, Long>>()
+    private val userAvatarLoadRequested = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
     private var chatAvatarLoadRequested = false
-    private var cachedUsers: Map<Long, User> = emptyMap()
     private var tempMessageIdCounter = -1L
     private val _sendingMessages = MutableStateFlow<List<PendingMessageEntry>>(emptyList())
+    val sendingMessages: StateFlow<List<PendingMessageEntry>> = _sendingMessages.asStateFlow()
+
+    private val _users = MutableStateFlow<Map<Long, User>>(emptyMap())
+    val users: StateFlow<Map<Long, User>> = _users.asStateFlow()
+
+    val messagesFlow: Flow<PagingData<MessageUiModel>> = Pager<Int, Message>(
+        config = PagingConfig(
+            pageSize = 40,
+            initialLoadSize = 40,
+            prefetchDistance = 20,
+            enablePlaceholders = false
+        ),
+        pagingSourceFactory = { messageRepository.getChatMessagesPaging(chatId) }
+    ).flow
+    .map { pagingData: PagingData<Message> ->
+        val mappedData = pagingData.map { message: Message ->
+            val sender = message.senderId?.let { userId ->
+                val cached = _users.value[userId]
+                val user = cached ?: userRepository.getById(userId)
+                if (user != null && cached == null) {
+                    _users.update { it + (userId to user) }
+                }
+                if (userAvatarLoadRequested.add(userId)) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        userRepository.loadAvatarIfMissing(userId)
+                        val updated = userRepository.getById(userId)
+                        if (updated != null) {
+                            _users.update { it + (userId to updated) }
+                        }
+                    }
+                }
+                user
+            }
+
+            val replyTo = message.replyMsgId?.let { messageRepository.getMessage(chatId, it) }
+            val replySender = replyTo?.senderId?.let { userId ->
+                val cached = _users.value[userId]
+                val user = cached ?: userRepository.getById(userId)
+                if (user != null && cached == null) {
+                    _users.update { it + (userId to user) }
+                }
+                user
+            }
+
+            val mediaGroupMessages = message.mediaGroupId?.let { groupId ->
+                val list = messageRepository.getMediaGroupList(groupId)
+                if (list.size > 1) list else null
+            }
+
+            val key = message.chatId to message.messageId
+            if (mediaLoadRequested.add(key)) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    messageRepository.ensureMediaDownloaded(message)
+                }
+            }
+
+            MessageUiModel.MessageItem(
+                message = message,
+                sender = sender,
+                replyToMessage = replyTo,
+                replySender = replySender,
+                mediaGroupMessages = mediaGroupMessages
+            )
+        }
+
+        val filteredData = mappedData.filter { item ->
+            val mediaGroupId = item.message.mediaGroupId
+            if (mediaGroupId != null && item.mediaGroupMessages != null) {
+                val representativeId = item.mediaGroupMessages.lastOrNull()?.messageId
+                item.message.messageId == representativeId
+            } else {
+                true
+            }
+        }
+
+        filteredData.insertSeparators { before, after ->
+            if (after == null) {
+                if (before != null) {
+                    val date = Instant.ofEpochMilli(before.message.timestamp)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+                    MessageUiModel.DateHeader(date = date, timestamp = before.message.timestamp)
+                } else {
+                    null
+                }
+            } else if (before != null) {
+                val beforeDay = messageDayEpochDay(before.message.timestamp)
+                val afterDay = messageDayEpochDay(after.message.timestamp)
+                if (beforeDay != afterDay) {
+                    val date = Instant.ofEpochMilli(before.message.timestamp)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+                    MessageUiModel.DateHeader(date = date, timestamp = before.message.timestamp)
+                } else {
+                    null
+                }
+            } else {
+                null
+            }
+        }
+    }.cachedIn(viewModelScope)
 
     private val _uiState = MutableStateFlow(GroupUiState())
     val uiState: StateFlow<GroupUiState> = _uiState.asStateFlow()
+
 
     init {
         observeGroupData()
@@ -95,11 +213,30 @@ class GroupViewModel(
     }
 
     fun selectReplyMessage(message: Message) {
-        _uiState.update { it.copy(replyToMessageId = message.messageId) }
+        viewModelScope.launch {
+            val sender = message.senderId?.let { userId ->
+                _users.value[userId] ?: userRepository.getById(userId)?.also { user ->
+                    _users.update { it + (userId to user) }
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    replyToMessageId = message.messageId,
+                    replyMessage = message,
+                    replySender = sender
+                )
+            }
+        }
     }
 
     fun clearReplyMessage() {
-        _uiState.update { it.copy(replyToMessageId = null) }
+        _uiState.update {
+            it.copy(
+                replyToMessageId = null,
+                replyMessage = null,
+                replySender = null
+            )
+        }
     }
 
     fun sendMessage() {
@@ -322,12 +459,12 @@ class GroupViewModel(
         }
     }
 
-    /** Подписывается на чат, сообщения, пользователей и ленивую загрузку медиа. */
+    /** Подписывается на чат. */
     private fun observeGroupData() {
         viewModelScope.launch {
             launch {
                 chatRepository.observeById(chatId).collect { chat ->
-                    _uiState.update { it.copy(chat = chat) }
+                    _uiState.update { it.copy(chat = chat, isLoading = false) }
 
                     if (chat != null && !chatAvatarLoadRequested) {
                         chatAvatarLoadRequested = true
@@ -337,160 +474,7 @@ class GroupViewModel(
                     }
                 }
             }
-
-            launch {
-                combine(
-                    messageRepository.getChatMessages(chatId),
-                    _sendingMessages
-                ) { messages, pending -> messages to pending }
-                .collectLatest { (messages, pending) ->
-                    // DAO уже отдаёт сообщения от новых к старым — под reverseLayout = true.
-                    val users = loadUsersFor(messages)
-                    val renderItems = withContext(Dispatchers.Default) {
-                        buildRenderItems(messages, users, pending)
-                    }
-
-                    _uiState.update {
-                        it.copy(
-                            renderItems = renderItems,
-                            isLoading = false
-                        )
-                    }
-
-                    withContext(Dispatchers.IO) {
-                        // Медиа и аватары догружаются в фоне, чтобы не задерживать первичную отрисовку.
-                        messages.forEach { message ->
-                            val key = message.chatId to message.messageId
-                            if (mediaLoadRequested.add(key)) {
-                                messageRepository.ensureMediaDownloaded(message)
-                            }
-                        }
-                        users.keys.forEach { userId ->
-                            if (userAvatarLoadRequested.add(userId)) {
-                                userRepository.loadAvatarIfMissing(userId)
-                            }
-                        }
-                    }
-                }
-            }
         }
-    }
-
-    /** Догружает только тех пользователей, которых ещё нет в кеше, одной выборкой. */
-    private suspend fun loadUsersFor(messages: List<Message>): Map<Long, User> {
-        val requiredIds = messages.mapNotNullTo(mutableSetOf()) { it.senderId }
-        if (requiredIds.isEmpty()) {
-            cachedUsers = emptyMap()
-            return emptyMap()
-        }
-
-        val missingIds = requiredIds.filterNot { cachedUsers.containsKey(it) }
-        val updatedCache = if (missingIds.isEmpty()) {
-            cachedUsers
-        } else {
-            val fetched = withContext(Dispatchers.IO) { userRepository.getByIds(missingIds) }
-            cachedUsers + fetched.associateBy { it.id }
-        }
-        // Удаляем из кеша пользователей, которых больше нет в активной переписке.
-        val trimmed = if (updatedCache.keys == requiredIds) {
-            updatedCache
-        } else {
-            updatedCache.filterKeys { it in requiredIds }
-        }
-        cachedUsers = trimmed
-        return trimmed
-    }
-
-    /** Считает соседние отношения между сообщениями для UI — позиции кластеров и заголовки дат. */
-    private fun buildRenderItems(
-        messagesNewestFirst: List<Message>,
-        users: Map<Long, User>,
-        pendingEntries: List<PendingMessageEntry> = emptyList()
-    ): List<MessageRenderItem> {
-        // Pending-сообщения самые новые — идут первыми (reverseLayout=true отобразит их внизу).
-        val pendingItems = pendingEntries.reversed().map { entry ->
-            MessageRenderItem(
-                message = entry.message,
-                sender = null,
-                replyToMessage = null,
-                replySender = null,
-                clusterPosition = MsgBubbleClusterPosition.Single,
-                showDateHeader = false,
-                sendStatus = entry.status
-            )
-        }
-
-        if (messagesNewestFirst.isEmpty()) return pendingItems
-
-        val messagesById = messagesNewestFirst.associateBy { it.messageId }
-        val messageDays = LongArray(messagesNewestFirst.size) { i ->
-            messageDayEpochDay(messagesNewestFirst[i].timestamp)
-        }
-
-        val dbItems = mutableListOf<MessageRenderItem>()
-        var index = 0
-
-        while (index < messagesNewestFirst.size) {
-            val message = messagesNewestFirst[index]
-            val mediaGroupId = message.mediaGroupId
-
-            // Собираем все подряд идущие сообщения с тем же mediaGroupId.
-            val groupSize: Int
-            val mediaGroupMessages: List<Message>?
-            if (mediaGroupId != null) {
-                var j = index + 1
-                while (j < messagesNewestFirst.size &&
-                    messagesNewestFirst[j].mediaGroupId == mediaGroupId) {
-                    j++
-                }
-                groupSize = j - index
-                mediaGroupMessages = if (groupSize > 1) {
-                    messagesNewestFirst.subList(index, j).sortedBy { it.timestamp }
-                } else {
-                    null
-                }
-            } else {
-                groupSize = 1
-                mediaGroupMessages = null
-            }
-
-            // older/newer соседи считаются уже за пределами всей группы.
-            val effectiveOlderIndex = index + groupSize
-            val effectiveNewerIndex = index - 1
-            val olderMessage = messagesNewestFirst.getOrNull(effectiveOlderIndex)
-            val newerMessage = messagesNewestFirst.getOrNull(effectiveNewerIndex)
-            val currentDay = messageDays[index]
-            val olderDay = if (effectiveOlderIndex < messageDays.size) messageDays[effectiveOlderIndex] else null
-
-            val isGroupedWithOlder = olderMessage?.let {
-                shouldClusterMessages(message, it, currentDay, olderDay ?: -1)
-            } == true
-            val isGroupedWithNewer = newerMessage?.let {
-                shouldClusterMessages(message, it, currentDay, messageDays[effectiveNewerIndex])
-            } == true
-            val clusterPosition = when {
-                isGroupedWithOlder && isGroupedWithNewer -> MsgBubbleClusterPosition.Middle
-                isGroupedWithOlder -> MsgBubbleClusterPosition.Bottom
-                isGroupedWithNewer -> MsgBubbleClusterPosition.Top
-                else -> MsgBubbleClusterPosition.Single
-            }
-            val showDateHeader = olderDay == null || olderDay != currentDay
-
-            val replyTo = message.replyMsgId?.let { messagesById[it] }
-            dbItems.add(MessageRenderItem(
-                message = message,
-                sender = message.senderId?.let(users::get),
-                replyToMessage = replyTo,
-                replySender = replyTo?.senderId?.let(users::get),
-                clusterPosition = clusterPosition,
-                showDateHeader = showDateHeader,
-                mediaGroupMessages = mediaGroupMessages
-            ))
-
-            index += groupSize
-        }
-
-        return pendingItems + dbItems
     }
 
     /** Пересчитывает summary последнего сообщения после удаления из истории. */
@@ -506,10 +490,10 @@ class GroupViewModel(
     }
 }
 
-private const val MESSAGE_CLUSTER_WINDOW_MS = 5 * 60 * 1000L
+internal const val MESSAGE_CLUSTER_WINDOW_MS = 5 * 60 * 1000L
 
 /** Решает, нужно ли визуально склеить соседние сообщения в один кластер. */
-private fun shouldClusterMessages(
+internal fun shouldClusterMessages(
     current: Message,
     neighbour: Message,
     currentDay: Long,
@@ -523,5 +507,5 @@ private fun shouldClusterMessages(
 }
 
 /** Возвращает день сообщения как количество дней с эпохи — дешевле, чем сравнивать LocalDate. */
-private fun messageDayEpochDay(timestamp: Long): Long =
+internal fun messageDayEpochDay(timestamp: Long): Long =
     Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()

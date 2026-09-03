@@ -12,6 +12,7 @@ import com.heofen.botgram.data.repository.UserRepository
 import com.heofen.botgram.database.AppDatabase
 import com.heofen.botgram.ui.screens.chatlist.ChatListViewModel
 import com.heofen.botgram.ui.screens.group.GroupViewModel
+import com.heofen.botgram.ui.screens.mediaviewer.MediaViewerViewModel
 import com.heofen.botgram.ui.screens.profile.ProfileTarget
 import com.heofen.botgram.ui.screens.profile.ProfileViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -90,6 +91,14 @@ fun appModule(appContainer: AppContainer) = module {
             chatRepository = get(),
             userRepository = get(),
             notificationPreferences = get()
+        )
+    }
+    viewModel { params ->
+        MediaViewerViewModel(
+            chatId = params.get(),
+            initialMessageId = params.get(),
+            messageRepository = get(),
+            userRepository = get()
         )
     }
 }

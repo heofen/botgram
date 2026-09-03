@@ -105,6 +105,12 @@ class VoiceMessagePlaybackState(context: Context) {
         }
     }
 
+    fun pause() {
+        if (player.isPlaying) {
+            player.pause()
+        }
+    }
+
     fun seekToFraction(message: Message, fraction: Float) {
         if (!isActive(message)) return
 
@@ -234,6 +240,12 @@ class VideoNotePlaybackState(context: Context) {
         if (player.isPlaying) player.pause() else {
             player.playWhenReady = true
             player.play()
+        }
+    }
+
+    fun pause() {
+        if (player.isPlaying) {
+            player.pause()
         }
     }
 

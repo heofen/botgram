@@ -164,6 +164,7 @@ fun MsgBubble(
     videoNotePlaybackState: VideoNotePlaybackState? = null,
     onAvatarClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    onMediaClick: (() -> Unit)? = null,
     sendStatus: SendStatus? = null
 ) {
     val isMediaBubble = msg.type.isRichMediaBubble()
@@ -302,7 +303,8 @@ fun MsgBubble(
                     mediaShape = mediaShape,
                     voicePlaybackState = voicePlaybackState,
                     videoNotePlaybackState = videoNotePlaybackState,
-                    sendStatus = sendStatus
+                    sendStatus = sendStatus,
+                    onMediaClick = onMediaClick
                 )
             }
         }
@@ -320,7 +322,8 @@ fun MediaGroupBubble(
     showSenderName: Boolean = !isPersonalMsg && !messages.first().isOutgoing,
     clusterPosition: MsgBubbleClusterPosition = MsgBubbleClusterPosition.Single,
     onAvatarClick: (() -> Unit)? = null,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onMediaClick: ((Long) -> Unit)? = null
 ) {
     val lastMsg = messages.last()
     val isOutgoing = lastMsg.isOutgoing
@@ -396,7 +399,7 @@ fun MediaGroupBubble(
                     )
             ) {
                 Column(modifier = Modifier.wrapContentWidth()) {
-                    MediaGroupGrid(messages = messages)
+                    MediaGroupGrid(messages = messages, onMediaClick = onMediaClick)
                     if (hasCaption) {
                         MediaCaptionFooter(
                             msg = lastMsg,
@@ -454,7 +457,8 @@ private fun MessageBubbleContent(
     mediaShape: RoundedCornerShape,
     voicePlaybackState: VoiceMessagePlaybackState?,
     videoNotePlaybackState: VideoNotePlaybackState?,
-    sendStatus: SendStatus? = null
+    sendStatus: SendStatus? = null,
+    onMediaClick: (() -> Unit)? = null
 ) {
     val replyPadding = Modifier.padding(
         start = if (showChrome) 12.dp else 4.dp,
@@ -485,7 +489,8 @@ private fun MessageBubbleContent(
                     mediaShape = mediaShape,
                     voicePlaybackState = voicePlaybackState,
                     videoNotePlaybackState = videoNotePlaybackState,
-                    sendStatus = sendStatus
+                    sendStatus = sendStatus,
+                    onMediaClick = onMediaClick
                 )
             }
         )
@@ -502,7 +507,8 @@ private fun MessageBubbleContent(
             mediaShape = mediaShape,
             voicePlaybackState = voicePlaybackState,
             videoNotePlaybackState = videoNotePlaybackState,
-            sendStatus = sendStatus
+            sendStatus = sendStatus,
+            onMediaClick = onMediaClick
         )
     }
 }
@@ -554,7 +560,8 @@ private fun BubbleBodyContent(
     mediaShape: RoundedCornerShape,
     voicePlaybackState: VoiceMessagePlaybackState?,
     videoNotePlaybackState: VideoNotePlaybackState?,
-    sendStatus: SendStatus? = null
+    sendStatus: SendStatus? = null,
+    onMediaClick: (() -> Unit)? = null
 ) {
     val isVisualMediaBubble = msg.type.isVisualMediaBubble()
     val hasCaption = msg.type != MessageType.TEXT && !msg.caption.isNullOrBlank()
@@ -599,7 +606,8 @@ private fun BubbleBodyContent(
                         icon = Icons.Default.Image,
                         label = "Photo",
                         shape = mediaShape,
-                        showMetaOverlay = false
+                        showMetaOverlay = false,
+                        onClick = onMediaClick
                     )
                 }
             )
@@ -615,7 +623,8 @@ private fun BubbleBodyContent(
                         msg = msg,
                         label = if (msg.type == MessageType.ANIMATION) "GIF" else "Video",
                         shape = mediaShape,
-                        showMetaOverlay = false
+                        showMetaOverlay = false,
+                        onClick = onMediaClick
                     )
                 }
             )

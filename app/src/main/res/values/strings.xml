@@ -58,5 +58,7 @@
     <string name="profile_language_label">Language Code</string>
     <string name="profile_members_count_label">Members count</string>
     <string name="profile_administrators_title">Administrators</string>
+    <string name="empty_chat_messages">No messages yet</string>
+    <string name="action_retry">Retry</string>
     <string name="profile_value_copied">Copied</string>
 </resources>

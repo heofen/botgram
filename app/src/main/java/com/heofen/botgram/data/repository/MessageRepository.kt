@@ -1,6 +1,7 @@
 package com.heofen.botgram.data.repository
 
 import android.util.Log
+import androidx.paging.PagingSource
 import com.heofen.botgram.data.MediaManager
 import com.heofen.botgram.data.remote.OutgoingVisualMedia
 import com.heofen.botgram.data.remote.TelegramIncomingMessage
@@ -27,8 +28,17 @@ class MessageRepository(
     fun getChatMessages(chatId: Long): Flow<List<Message>> =
         messageDao.getChatMessages(chatId)
 
+    fun getChatMessagesPaging(chatId: Long): PagingSource<Int, Message> =
+        messageDao.getChatMessagesPaging(chatId)
+
+    fun getMediaMessagesForChat(chatId: Long): Flow<List<Message>> =
+        messageDao.getMediaMessagesForChat(chatId)
+
     fun getMediaGroup(groupId: String): Flow<List<Message>> =
         messageDao.getMediaGroup(groupId)
+
+    suspend fun getMediaGroupList(groupId: String): List<Message> =
+        messageDao.getMediaGroupList(groupId)
 
     suspend fun getMessage(chatId: Long, messageId: Long): Message? =
         messageDao.getMessage(chatId, messageId)
